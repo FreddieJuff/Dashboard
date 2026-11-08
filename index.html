@@ -291,6 +291,7 @@ function pull(){
    .then(function(r){return r.json()})
    .then(function(j){
      pulling=false;
+     if(j&&j.kpi!==undefined){ kpi={t:Date.now(),v:j.kpi}; try{localStorage.setItem('fd_kpi',JSON.stringify(kpi))}catch(e){} if(tab=='today') setTimeout(render,0); }
      if(j&&Array.isArray(j.events)){ setEvents(j.events); if(tab=='lifehome') setTimeout(render,0); }
      if(!j||j.error){ syncState=errText(j&&j.error); render(); return; }
      var remote=j.data||{};
@@ -433,13 +434,41 @@ function header(title,xl){
 }
 function greet(){var h=new Date().getHours();return (h<12?'Morning':h<18?'Afternoon':'Evening')+',<br>Freddie.'}
 function weekDays(){var ws=weekStart(new Date());return S.days.filter(function(d){return d.date>=ws})}
+var kpi=null; try{ kpi=JSON.parse(localStorage.getItem('fd_kpi')||'null'); }catch(e){}
+function kn(x){ var n=parseFloat(String(x==null?'':x).replace(/[$,\s]/g,'')); return isNaN(n)?0:n; }
+function kpick(fl,re){ for(var k in fl){ if(re.test(k)) return kn(fl[k]); } return 0; }
+function kstats(fl){
+  var r={retail:kpick(fl,/^once\s*off.*tot/i),hours:kpick(fl,/^field\s*hours/i),rph:kpick(fl,/^total\s*rph/i),stops:kpick(fl,/^stops$/i),buyers:kpick(fl,/^buyers$/i),medals:kpick(fl,/^medals$/i),ups:kpick(fl,/^volume$/i),upsAmt:kpick(fl,/^amount$/i)};
+  if(!r.rph&&r.hours) r.rph=r.retail/r.hours; return r;
+}
+function kpiCard(){
+  if(!kpi) return '<div class="card"><h2>KPI sheet</h2><div class="empty">Your results from the Orexis KPI sheet will show here once your Google script is updated.</div></div>';
+  var k=kpi.v;
+  if(!k) return '<div class="card"><h2>KPI sheet</h2><div class="empty">Couldn\'t find this week\'s tab (WC dd-mm-yy) in the KPI sheet yet.</div></div>';
+  if(k.error) return '<div class="card"><h2>KPI sheet</h2><div class="empty">Couldn\'t read the KPI sheet: '+esc(k.error)+'</div></div>';
+  var bl=k.blocks||[], wk=bl.find(function(b){return /weekly|total/i.test(b.label)})||null;
+  var days=bl.filter(function(b){return b!==wk}).map(function(b){return {label:b.label,s:kstats(b.fields)}}).filter(function(d){return d.s.hours>0||d.s.retail>0});
+  if(!wk&&!days.length) return '<div class="card"><h2>KPI sheet · '+esc(k.sheet)+'</h2><div class="empty">No results for you in '+esc(k.sheet)+' yet.</div></div>';
+  var t=wk?kstats(wk.fields):days.reduce(function(a,d){for(var x in d.s)a[x]=(a[x]||0)+d.s[x];return a},{});
+  if(!wk&&t.hours) t.rph=t.retail/t.hours;
+  var z=zone(t.rph), conv=t.stops?Math.round(t.buyers/t.stops*100):0, avg=t.buyers?t.retail/t.buyers:0, gap=Math.max(0,120*t.hours-t.retail);
+  var o='<div class="card"><h2>'+(k.prev?'Last week':'This week')+' · KPI sheet <span class="badge '+(t.hours?z[1]:'z-silver')+'">'+(t.hours?z[0]+' zone':'No hours yet')+'</span></h2>'+
+    '<div class="big">'+money(t.retail)+'</div><div class="muted">'+t.hours+' field hours · <b style="color:var(--ink)">'+money(t.rph,1)+'</b> per hour'+(t.hours?(t.rph>=120?' · gold average hit ✓':' · '+money(gap)+' more for a gold average'):'')+'</div>'+
+    '<div class="bar'+(t.rph>=120?' ok':'')+'"><i style="width:'+Math.min(100,t.rph/120*100)+'%"></i></div>'+
+    '<div class="stats" style="margin-top:14px"><div class="stat"><div class="v">'+t.stops+'</div><div class="l">Stops</div></div><div class="stat"><div class="v">'+t.buyers+'</div><div class="l">Buyers · '+conv+'%</div></div><div class="stat"><div class="v">'+money(avg)+'</div><div class="l">Avg / buyer</div></div></div>'+
+    '<div class="stats" style="margin-top:12px"><div class="stat"><div class="v">'+t.medals+'</div><div class="l">Medals</div></div><div class="stat"><div class="v">'+t.ups+'</div><div class="l">Upsells</div></div><div class="stat"><div class="v">'+money(t.upsAmt)+'</div><div class="l">Upsell $</div></div></div>';
+  if(days.length) o+='<div style="margin-top:14px">'+days.map(function(d){var zz=zone(d.s.rph);return '<div class="row"><div class="grow"><div class="t">'+esc(d.label||'Day')+' · '+money(d.s.retail)+'</div><div class="s">'+d.s.hours+'h · '+money(d.s.rph)+'/hr · '+d.s.stops+' stops · '+d.s.buyers+' buyers</div></div><span class="badge '+zz[1]+'">'+zz[0]+'</span></div>'}).join('')+'</div>';
+  o+='<div class="muted" style="margin-top:10px">From '+esc(k.sheet)+' · read-only · refreshes every 10 min</div></div>';
+  return o;
+}
 function vToday(){
   var wd=weekDays(), r=0,h=0; wd.forEach(function(d){r+=+d.retail||0;h+=+d.hours||0});
   var rph=h?r/h:0, z=zone(rph);
   var open=S.tasks.filter(function(t){return !t.done&&WORK_AREAS.indexOf(t.area)>=0}).slice(0,3);
   var recent=S.days.slice().sort(function(a,b){return a.date<b.date?1:-1}).slice(0,7);
   var o=header(greet(),1);
-  o+='<div class="card"><h2>This week <span class="badge '+(h?z[1]:'z-silver')+'">'+(h?z[0]+' zone':'No days yet')+'</span></h2><div class="stats">'+
+  o+=kpiCard();
+  o+='<div class="card"><h2>Manual log · this week <span class="badge '+(h?z[1]:'z-silver')+'">'+(h?z[0]+' zone':'No days yet')+'</span></h2><div class="stats">'+
      '<div class="stat"><div class="v">'+money(r)+'</div><div class="l">Retail</div></div>'+
      '<div class="stat"><div class="v">'+money(rph)+'</div><div class="l">Avg / hour</div></div>'+
      '<div class="stat"><div class="v">'+wd.length+'</div><div class="l">Days logged</div></div></div>'+
