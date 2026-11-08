@@ -105,6 +105,21 @@ button{font:inherit;cursor:pointer;border:0}
 .cat .track i{display:block;height:100%;border-radius:99px}
 .cat .a{width:70px;text-align:right;font-weight:700;font-size:13px;flex:none}
 .dot{width:10px;height:10px;border-radius:50%;flex:none}
+.wx .wxnow{display:flex;gap:14px;align-items:center}
+.wxi{font-size:44px;line-height:1}.wxt{font-size:34px;font-weight:800;letter-spacing:-.03em;line-height:1}
+.wxdays{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px;text-align:center;border-top:1px solid var(--line);padding-top:12px}
+.wxd{font-weight:700}
+.focus{background:linear-gradient(135deg,#1f4b45,#2a7d72);color:#fff;border:0}
+.focus .flabel,.word .flabel{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.8}
+.ftitle{font-size:21px;font-weight:800;margin-top:6px;letter-spacing:-.01em}.fwhen{margin-top:4px;opacity:.9;font-weight:600}.fnote{margin-top:8px;font-size:13px;opacity:.85}
+.plabel{font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:4px 2px 8px}
+.pulse{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.tile{border-radius:16px;padding:12px 13px;color:#fff;min-height:104px;display:flex;flex-direction:column}
+.tile.wide{grid-column:span 2;min-height:0}
+.tile .tl{font-size:11px;font-weight:700;opacity:.85}.tile .tv{font-size:21px;font-weight:800;letter-spacing:-.02em;margin-top:6px}.tile .tv .of{font-size:12px;opacity:.75;font-weight:600}
+.tile .ts{font-size:11px;opacity:.85;margin-top:auto;padding-top:6px}.tile .bar{background:rgba(255,255,255,.25)}.tile .bar>i{background:#fff!important}
+.t1{background:#2a7d72}.t2{background:#3f5ea8}.t3{background:#b4532a}.t4{background:#6b4fb3}.t5{background:#5d6676}
+.word{background:linear-gradient(135deg,#d98a2b,#c2671d);color:#fff;border:0}.wq{font-size:19px;font-weight:700;line-height:1.35;margin-top:8px}.wa{margin-top:8px;font-size:13px;opacity:.9;font-weight:600}
 .warn{display:block;width:100%;text-align:left;background:#f26b1d;color:#fff;font-weight:700;font-size:14px;border-radius:12px;padding:12px 14px;margin-bottom:12px}
 .notice{background:var(--life-soft);color:var(--life);border-radius:12px;padding:10px 12px;font-size:13px;font-weight:600;margin-bottom:12px}
 nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:center;padding:8px 8px calc(8px + env(safe-area-inset-bottom))}
@@ -135,8 +150,8 @@ if(!S.rules||typeof S.rules!=='object') S.rules={};
 if(!S.incomeTarget) S.incomeTarget=1200;
 
 var WORK_AREAS=['Orexis','Geelong'], LIFE_AREAS=['Money','Store','Personal'];
-var WORK_TABS=['today','goals','worktasks'], LIFE_TABS=['money','spending','lifetasks'];
-var TAB_LABEL={today:'Today',goals:'Goals',worktasks:'Tasks',money:'Money',spending:'Spending',lifetasks:'Tasks'};
+var WORK_TABS=['today','goals','worktasks'], LIFE_TABS=['lifehome','money','spending','lifetasks'];
+var TAB_LABEL={lifehome:'Home',today:'Today',goals:'Goals',worktasks:'Tasks',money:'Money',spending:'Spending',lifetasks:'Tasks'};
 var CATS={
   'Pay':{c:'#1f9d63',k:['orexis','salary','wages','payroll','employment hero']},
   'Rent & home':{c:'#4b5bd6',k:['rent','real estate','ray white','barry plant','jellis','nelson alexander','bunnings','ikea']},
@@ -200,6 +215,7 @@ function pull(){
    .then(function(r){return r.json()})
    .then(function(j){
      pulling=false;
+     if(j&&Array.isArray(j.events)){ setEvents(j.events); if(tab=='lifehome') setTimeout(render,0); }
      if(!j||j.error){ syncState=errText(j&&j.error); render(); return; }
      var remote=j.data||{};
      if(!isEmpty(remote) && (isEmpty(S) || (remote.savedAt||0)>(S.savedAt||0))){ S=normalise(remote); persistLocal(); if(j.applied) flash='Claude updated your dashboard ('+j.applied+' change'+(j.applied==1?'':'s')+').'; render(); syncOk(); }
@@ -365,6 +381,102 @@ function vToday(){
   return o;
 }
 function dueText(d){var n=daysUntil(d); if(n<0) return 'Overdue by '+(-n)+' day'+(n==-1?'':'s'); if(n==0) return 'Due today'; if(n==1) return 'Due tomorrow'; return 'Due '+fmtDate(d)+' · in '+n+' days';}
+/* ---------- Life Home ---------- */
+var WORDS=[
+ ['The secret of getting ahead is getting started.','Mark Twain'],
+ ['Commit to the LORD whatever you do, and he will establish your plans.','Proverbs 16:3'],
+ ['Discipline is choosing between what you want now and what you want most.','Abraham Lincoln (attributed)'],
+ ['I can do all things through Christ which strengtheneth me.','Philippians 4:13'],
+ ['Success is the sum of small efforts, repeated day in and day out.','Robert Collier'],
+ ['Be strong and of a good courage; be not afraid, neither be thou dismayed.','Joshua 1:9'],
+ ['It always seems impossible until it\'s done.','Nelson Mandela'],
+ ['Trust in the LORD with all thine heart; and lean not unto thine own understanding.','Proverbs 3:5'],
+ ['Don\'t count the days, make the days count.','Muhammad Ali'],
+ ['Whatsoever ye do, do it heartily, as to the Lord, and not unto men.','Colossians 3:23'],
+ ['Hard work beats talent when talent doesn\'t work hard.','Tim Notke'],
+ ['This is the day which the LORD hath made; we will rejoice and be glad in it.','Psalm 118:24'],
+ ['You don\'t have to be great to start, but you have to start to be great.','Zig Ziglar'],
+ ['And let us not be weary in well doing: for in due season we shall reap, if we faint not.','Galatians 6:9'],
+ ['People rarely succeed unless they have fun in what they are doing.','Dale Carnegie'],
+ ['The plans of the diligent lead surely to abundance.','Proverbs 21:5'],
+ ['What you do today can improve all your tomorrows.','Ralph Marston'],
+ ['Be still, and know that I am God.','Psalm 46:10'],
+ ['Small daily improvements are the key to staggering long-term results.','Robin Sharma'],
+ ['Cast thy burden upon the LORD, and he shall sustain thee.','Psalm 55:22'],
+ ['Fall seven times, stand up eight.','Japanese proverb'],
+ ['For I know the thoughts that I think toward you, saith the LORD, thoughts of peace.','Jeremiah 29:11'],
+ ['Motivation gets you going, but discipline keeps you growing.','John C. Maxwell'],
+ ['Delight thyself also in the LORD; and he shall give thee the desires of thine heart.','Psalm 37:4']
+];
+function todaysWord(){ var d=new Date(), n=Math.floor((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()))/86400000); return WORDS[n%WORDS.length]; }
+var WX={0:['☀️','Clear'],1:['🌤️','Mostly sunny'],2:['⛅','Partly cloudy'],3:['☁️','Cloudy'],45:['🌫️','Fog'],48:['🌫️','Fog'],51:['🌦️','Light drizzle'],53:['🌦️','Drizzle'],55:['🌧️','Drizzle'],61:['🌦️','Light rain'],63:['🌧️','Rain'],65:['🌧️','Heavy rain'],66:['🌧️','Freezing rain'],67:['🌧️','Freezing rain'],71:['🌨️','Snow'],73:['🌨️','Snow'],75:['🌨️','Snow'],80:['🌦️','Showers'],81:['🌧️','Showers'],82:['⛈️','Heavy showers'],95:['⛈️','Thunderstorm'],96:['⛈️','Thunderstorm'],99:['⛈️','Thunderstorm']};
+function wx(c){return WX[c]||['🌡️','']}
+var weather=null; try{ weather=JSON.parse(localStorage.getItem('fd_wx')||'null'); }catch(e){}
+function loadWeather(){
+  if(weather && Date.now()-weather.t<30*60000) return;
+  fetch('https://api.open-meteo.com/v1/forecast?latitude=-38.1499&longitude=144.3617&current=temperature_2m,apparent_temperature,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Australia%2FMelbourne&forecast_days=4')
+   .then(function(r){return r.json()}).then(function(j){ if(!j||!j.current) return; weather={t:Date.now(),j:j}; try{localStorage.setItem('fd_wx',JSON.stringify(weather))}catch(e){} if(tab=='lifehome') render(); }).catch(function(){});
+}
+var events=null; try{ events=JSON.parse(localStorage.getItem('fd_events')||'null'); }catch(e){}
+function setEvents(ev){ events={t:Date.now(),list:ev}; try{localStorage.setItem('fd_events',JSON.stringify(events))}catch(e){} }
+function nextOutBill(){ return S.bills.filter(function(b){return !b.paid&&!paused(b)}).sort(function(a,b){return a.due<b.due?-1:1})[0]; }
+function safeToSpend(){
+  var spendAcc=S.accounts.find(function(a){return a.spend})||S.accounts[0], pd=nextPayday();
+  var due=S.bills.filter(function(b){return !b.paid&&!paused(b)&&!b.fromSaver&&b.due<=pd}).reduce(function(a,b){return a+(+b.amount||0)},0);
+  return {safe:spendAcc?(+spendAcc.bal||0)-due:0, pd:pd, days:Math.max(1,daysUntil(pd))};
+}
+function countdown(d){var n=daysUntil(d); return n<0?(-n)+' day'+(n==-1?'':'s')+' ago':n==0?'Today':n==1?'Tomorrow':n+' days to go';}
+function evWhen(e){
+  var s=new Date(e.start), today=iso(), d=iso(s), n=daysUntil(d);
+  var day=n==0?'Today':n==1?'Tomorrow':s.toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short'});
+  return e.allDay?day:day+' · '+s.toLocaleTimeString('en-AU',{hour:'numeric',minute:'2-digit'});
+}
+function vLifeHome(){
+  loadWeather();
+  var o=header('Life');
+  // weather
+  if(weather&&weather.j){ var c=weather.j.current, dl=weather.j.daily, w=wx(c.weather_code);
+    o+='<div class="card wx"><div class="wxnow"><span class="wxi">'+w[0]+'</span><div><div class="wxt">'+Math.round(c.temperature_2m)+'°</div><div class="muted">Geelong · '+w[1]+'<br>Feels '+Math.round(c.apparent_temperature)+'° · '+Math.round(dl.temperature_2m_max[0])+'° / '+Math.round(dl.temperature_2m_min[0])+'° · rain '+(dl.precipitation_probability_max[0]||0)+'%</div></div></div><div class="wxdays">'+
+      [1,2,3].map(function(i){return '<div><div class="muted">'+parse(dl.time[i]).toLocaleDateString('en-AU',{weekday:'short'})+'</div><div style="font-size:20px">'+wx(dl.weather_code[i])[0]+'</div><div class="wxd">'+Math.round(dl.temperature_2m_max[i])+'°</div><div class="muted" style="font-size:11px">'+(dl.precipitation_probability_max[i]||0)+'%</div></div>'}).join('')+'</div></div>';
+  } else o+='<div class="card"><div class="muted">Loading Geelong weather…</div></div>';
+  // focus
+  var f=S.focus;
+  o+=f&&f.title?'<div class="card focus tap" data-focus><div class="flabel">● Focus</div><div class="ftitle">'+esc(f.title)+'</div><div class="fwhen">'+(f.date?fmtDate(f.date)+' · '+countdown(f.date):'')+'</div>'+(f.note?'<div class="fnote">'+esc(f.note)+'</div>':'')+'</div>'
+    :'<div class="card tap" data-focus><div class="muted">+ Set a focus: something big coming up</div></div>';
+  // pulse
+  var st=safeToSpend(), nb=nextOutBill(), sv=S.savings||{}, sacc=S.accounts.find(function(a){return a.id==sv.acc}), scur=sacc?(+sacc.bal||0):(+sv.cur||0);
+  var gym=S.bills.find(function(b){return /gym|fitness/i.test(b.name)});
+  o+='<div class="plabel">Pulse</div><div class="pulse">'+
+    '<div class="tile t1 tap" data-go="money"><div class="tl">Safe to spend</div><div class="tv '+(st.safe<0?'neg':'')+'">'+money(st.safe)+'</div><div class="ts">~'+money(st.safe/st.days)+'/day till payday</div></div>'+
+    '<div class="tile t2 tap" data-go="money"><div class="tl">Next money in</div><div class="tv">'+parse(st.pd).toLocaleDateString('en-AU',{weekday:'short',day:'numeric'})+'</div><div class="ts">Payday · '+countdown(st.pd).toLowerCase()+'</div></div>'+
+    '<div class="tile t3 tap" data-go="money"><div class="tl">Next money out</div><div class="tv">'+(nb?money(nb.amount):'–')+'</div><div class="ts">'+(nb?esc(nb.name.replace(/\s*\(.*\)/,''))+' · '+parse(nb.due).toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short'}):'Nothing due')+'</div></div>'+
+    '<div class="tile t5 tap" data-go="money"><div class="tl">Gym</div><div class="tv" style="font-size:18px">'+(gym?(paused(gym)?'Paused':'Active'):'–')+'</div><div class="ts">'+(gym?(paused(gym)?'Resumes '+parse(gym.pausedUntil).toLocaleDateString('en-AU',{day:'numeric',month:'short'}):esc(gym.name)):'Add your gym as a bill')+'</div></div>'+
+    '<div class="tile t4 wide tap" data-savings><div class="tl">Savings</div><div class="tv">'+money(scur)+'<span class="of"> / '+money(sv.target||0)+'</span></div><div class="bar" style="margin-top:6px"><i style="width:'+(sv.target?Math.min(100,scur/sv.target*100):0)+'%"></i></div><div class="ts">'+esc(sv.label||'Tap to set a goal')+'</div></div>'+
+    '</div>';
+  // coming up
+  var items=[]; if(f&&f.date&&daysUntil(f.date)>=0) items.push({title:f.title,start:f.date+'T00:00:00',allDay:true,focus:1});
+  var hasCal=events&&Array.isArray(events.list);
+  if(hasCal) events.list.forEach(function(e){ if(!(f&&f.date&&e.allDay&&iso(new Date(e.start))==f.date&&e.title==f.title)) items.push(e); });
+  items.sort(function(a,b){return new Date(a.start)-new Date(b.start)});
+  o+='<div class="card"><h2>Coming up</h2>'+(items.length?items.slice(0,6).map(function(e){return '<div class="row"><span class="dot" style="background:'+(e.focus?'var(--accent)':e.birthday?'#c2418d':'var(--life)')+'"></span><div class="grow"><div class="t">'+(e.birthday?'🎂 ':'')+esc(e.title)+'</div><div class="s">'+evWhen(e)+(e.cal&&!e.focus?' · '+esc(e.cal):'')+'</div></div></div>'}).join(''):'<div class="empty">Nothing in the next 3 weeks.</div>')+
+    (hasCal?'':'<div class="muted" style="margin-top:8px">Your Google Calendar will show here once your Google script is updated.</div>')+'</div>';
+  // word
+  var wd=todaysWord();
+  o+='<div class="card word"><div class="flabel">Today\'s word</div><div class="wq">'+esc(wd[0])+'</div><div class="wa">'+esc(wd[1])+'</div></div>';
+  return o;
+}
+function focusSheet(){
+  var f=S.focus||{};
+  sheet('Focus','The big thing coming up. It shows at the top of Life Home with a countdown.',[{name:'title',label:'What is it?',value:f.title},{name:'date',label:'Date',type:'date',value:f.date,req:false},{name:'note',label:'Note (optional)',value:f.note,req:false}],
+    function(d){ S.focus={title:d.title,date:d.date||'',note:d.note||''}; }, f.title?function(){ S.focus=null; }:null);
+}
+function savingsSheet(){
+  var sv=S.savings||{}; var names=['(enter manually)'].concat(S.accounts.map(function(a){return a.name}));
+  var cur=S.accounts.find(function(a){return a.id==sv.acc});
+  sheet('Savings goal','Pick the account you\'re saving in and it tracks its balance automatically.',[{name:'label',label:'What it\'s for',value:sv.label},{name:'target',label:'Goal $',type:'number',step:'1',value:sv.target},{name:'acc',label:'Saving in',options:names,value:cur?cur.name:'(enter manually)'},{name:'cur',label:'Saved so far $ (only if entering manually)',type:'number',step:'0.01',value:sv.cur,req:false}],
+    function(d){ var a=S.accounts.find(function(x){return x.name==d.acc}); S.savings={label:d.label,target:+d.target||0,acc:a?a.id:'',cur:+d.cur||0}; });
+}
+
 function vMoney(){
   var active=S.bills.filter(function(b){return !b.paid&&!paused(b)}).sort(function(a,b){return a.due<b.due?-1:1});
   var held=S.bills.filter(function(b){return paused(b)});
@@ -483,11 +595,11 @@ function txSheet(t){
 }
 
 /* ---------- render + events ---------- */
-var ICONS={today:'<path d="M3 12h4l3-8 4 16 3-8h4"/>',goals:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/>',
+var ICONS={lifehome:'<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',today:'<path d="M3 12h4l3-8 4 16 3-8h4"/>',goals:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/>',
 worktasks:'<path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6l1 1 2-2M3.5 12l1 1 2-2M3.5 18l1 1 2-2"/>',lifetasks:'<path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6l1 1 2-2M3.5 12l1 1 2-2M3.5 18l1 1 2-2"/>',
 money:'<rect x="2" y="6" width="20" height="12" rx="3"/><circle cx="12" cy="12" r="2.5"/>',spending:'<path d="M21 12a9 9 0 1 1-9-9v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/>'};
 function render(){
-  var v={today:vToday,goals:vGoals,worktasks:vTasks,money:vMoney,spending:vSpending,lifetasks:vTasks}[tab]();
+  var v={today:vToday,goals:vGoals,worktasks:vTasks,money:vMoney,spending:vSpending,lifetasks:vTasks,lifehome:vLifeHome}[tab]();
   var app=document.getElementById('app'); app.innerHTML=v; app.className='wrap'+(isLife()?' lifemode':'');
   document.getElementById('nav').className='tabs'+(isLife()?' life':'');
   document.getElementById('tabs').innerHTML=(isLife()?LIFE_TABS:WORK_TABS).map(function(t){return '<button class="'+(t==tab?'on':'')+'" data-tab="'+t+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+ICONS[t]+'</svg>'+TAB_LABEL[t]+'</button>'}).join('');
@@ -503,12 +615,14 @@ function render(){
 }
 function go(t){tab=t;flash='';catOpen=null;try{localStorage.setItem('fd_tab',t)}catch(e){} try{history.replaceState(null,'','#'+t)}catch(e){} window.scrollTo(0,0); render();}
 document.addEventListener('click',function(e){
-  var el=e.target.closest('[data-tab],[data-go],[data-mode],[data-task],[data-del-task],[data-pay],[data-edit-bill],[data-add],[data-week],[data-edit-goal],[data-area],[data-del-day],[data-clear-done],[data-edit-target],[data-range],[data-cat],[data-tx],[data-acc],[data-settings]');
+  var el=e.target.closest('[data-tab],[data-go],[data-mode],[data-task],[data-del-task],[data-pay],[data-edit-bill],[data-add],[data-week],[data-edit-goal],[data-area],[data-del-day],[data-clear-done],[data-edit-target],[data-range],[data-cat],[data-tx],[data-acc],[data-settings],[data-focus],[data-savings]');
   if(!el) return; var ds=el.dataset;
   if('settings' in ds) return settingsSheet();
   if(ds.tab) return go(ds.tab);
   if(ds.go) return go(ds.go);
-  if(ds.mode) return go(ds.mode=='life'?'money':'today');
+  if(ds.mode) return go(ds.mode=='life'?'lifehome':'today');
+  if('focus' in ds) return focusSheet();
+  if('savings' in ds) return savingsSheet();
   if(ds.task){var t=S.tasks.find(function(x){return x.id==ds.task}); t.done=!t.done; save(); return render();}
   if(ds.delTask){S.tasks=S.tasks.filter(function(x){return x.id!=ds.delTask}); save(); return render();}
   if(ds.delDay){S.days=S.days.filter(function(x){return x.id!=ds.delDay}); save(); return render();}
