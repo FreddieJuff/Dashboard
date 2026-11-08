@@ -170,30 +170,35 @@ function zone(rph){
 
 /* ---------- saving + Google Drive sync ---------- */
 var SYNC={url:'',key:''}; try{ SYNC=JSON.parse(localStorage.getItem('fd_sync')||'null')||SYNC; }catch(e){}
-var syncState='';
+var syncState='', pulling=false, connecting=false;
+function isEmpty(x){ return !x || ['bills','accounts','income','tasks','goals','days','tx'].every(function(k){ return !x[k]||!x[k].length; }); }
 function persistLocal(){ try{ localStorage.setItem('fd_state', JSON.stringify(S)); }catch(e){} }
 function save(){
+  if(connecting){ connecting=false; persistLocal(); pull(); return; }
   S.savedAt=Date.now(); persistLocal();
   if(!SYNC.url){ setSync('Saved on this phone'); return; }
   setSync('Saving…'); clearTimeout(timer); timer=setTimeout(push,1200);
 }
 function push(){
+  if(pulling){ clearTimeout(timer); timer=setTimeout(push,800); return; }
+  if(isEmpty(S)) { setSync('Synced to Drive'); return; }
   return fetch(SYNC.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:SYNC.key,data:S})})
    .then(function(r){return r.json()}).then(function(j){ if(j&&j.ok){syncState='Synced to Drive';} else {syncState='Sync error: '+((j&&j.error)||'unknown');} setSync(syncState); })
    .catch(function(){ syncState='Offline · saved on phone'; setSync(syncState); });
 }
 function pull(){
   if(!SYNC.url) return Promise.resolve();
-  setSync('Syncing…');
+  setSync('Syncing…'); pulling=true;
   return fetch(SYNC.url+(SYNC.url.indexOf('?')<0?'?':'&')+'key='+encodeURIComponent(SYNC.key)+'&t='+Date.now())
    .then(function(r){return r.json()})
    .then(function(j){
+     pulling=false;
      if(!j||j.error){ syncState='Sync error: '+((j&&j.error)||'unknown'); setSync(syncState); return; }
      var remote=j.data||{};
-     if((remote.savedAt||0)>(S.savedAt||0)){ S=normalise(remote); persistLocal(); if(j.applied) flash='Claude updated your dashboard ('+j.applied+' change'+(j.applied==1?'':'s')+').'; render(); syncState='Synced to Drive'; setSync(syncState); }
+     if(!isEmpty(remote) && (isEmpty(S) || (remote.savedAt||0)>(S.savedAt||0))){ S=normalise(remote); persistLocal(); if(j.applied) flash='Claude updated your dashboard ('+j.applied+' change'+(j.applied==1?'':'s')+').'; render(); syncState='Synced to Drive'; setSync(syncState); }
      else if((S.savedAt||0)>(remote.savedAt||0)){ push(); }
      else { syncState='Synced to Drive'; setSync(syncState); }
-   }).catch(function(){ syncState='Offline · saved on phone'; setSync(syncState); });
+   }).catch(function(){ pulling=false; syncState='Offline · saved on phone'; setSync(syncState); });
 }
 function normalise(x){
   ['days','bills','income','tx','tasks','goals','accounts'].forEach(function(k){ if(!Array.isArray(x[k])) x[k]=[]; });
@@ -207,7 +212,7 @@ function settingsSheet(){
     {name:'payday',label:'Payday',options:['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'],value:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][S.payday==null?4:S.payday]}],
     function(d){ var nu={url:(d.url||'').trim(),key:(d.key||'').trim()}; var changed=nu.url!=SYNC.url||nu.key!=SYNC.key; SYNC=nu; try{localStorage.setItem('fd_sync',JSON.stringify(SYNC))}catch(e){}
       S.payday=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].indexOf(d.payday);
-      if(changed&&SYNC.url) setTimeout(pull,50); });
+      if(changed&&SYNC.url){ clearTimeout(timer); connecting=true; } });
   var acts=document.querySelector('#sf .acts');
   var extra=document.createElement('div'); extra.style.cssText='display:flex;gap:10px;margin:4px 0 12px';
   extra.innerHTML='<button type="button" class="btn ghost" id="bk">Copy backup</button><button type="button" class="btn ghost" id="rs">Restore backup</button>';
