@@ -105,6 +105,7 @@ button{font:inherit;cursor:pointer;border:0}
 .cat .track i{display:block;height:100%;border-radius:99px}
 .cat .a{width:70px;text-align:right;font-weight:700;font-size:13px;flex:none}
 .dot{width:10px;height:10px;border-radius:50%;flex:none}
+.warn{display:block;width:100%;text-align:left;background:#f26b1d;color:#fff;font-weight:700;font-size:14px;border-radius:12px;padding:12px 14px;margin-bottom:12px}
 .notice{background:var(--life-soft);color:var(--life);border-radius:12px;padding:10px 12px;font-size:13px;font-weight:600;margin-bottom:12px}
 nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:center;padding:8px 8px calc(8px + env(safe-area-inset-bottom))}
 nav.tabs .in{display:flex;max-width:560px;width:100%}
@@ -169,35 +170,41 @@ function zone(rph){
 }
 
 /* ---------- saving + Google Drive sync ---------- */
-var SYNC={url:'',key:''}; try{ SYNC=JSON.parse(localStorage.getItem('fd_sync')||'null')||SYNC; }catch(e){}
+var DEFAULT_URL='https://script.google.com/macros/s/AKfycbyGqYUxRPoZudwmlsrJ_D1uz80JIv5XENRUvlt-x-380B0Fv4Ybcjs5Y2jRJpP6JwyywQ/exec';
+var SYNC={url:DEFAULT_URL,key:''}; try{ SYNC=JSON.parse(localStorage.getItem('fd_sync')||'null')||SYNC; }catch(e){}
+if(!SYNC.url) SYNC.url=DEFAULT_URL;
+var ERR={'wrong pin':'Wrong PIN','wrong key':'Wrong PIN','locked':'Too many wrong PINs. Locked for an hour','no pin set':'No PIN set in the Google script'};
+function errText(e){ return ERR[e]||('Sync error: '+(e||'unknown')); }
+function syncOk(){ syncState='Synced to Drive'; if(document.querySelector('.warn')) render(); else setSync(syncState); }
+function needsConnect(){ return !SYNC.key || /Wrong PIN|Locked|No PIN/i.test(syncState); }
 var syncState='', pulling=false, connecting=false;
 function isEmpty(x){ return !x || ['bills','accounts','income','tasks','goals','days','tx'].every(function(k){ return !x[k]||!x[k].length; }); }
 function persistLocal(){ try{ localStorage.setItem('fd_state', JSON.stringify(S)); }catch(e){} }
 function save(){
   if(connecting){ connecting=false; persistLocal(); pull(); return; }
   S.savedAt=Date.now(); persistLocal();
-  if(!SYNC.url){ setSync('Saved on this phone'); return; }
+  if(!SYNC.url||!SYNC.key){ setSync('Not connected'); return; }
   setSync('Saving…'); clearTimeout(timer); timer=setTimeout(push,1200);
 }
 function push(){
   if(pulling){ clearTimeout(timer); timer=setTimeout(push,800); return; }
   if(isEmpty(S)) { setSync('Synced to Drive'); return; }
   return fetch(SYNC.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:SYNC.key,data:S})})
-   .then(function(r){return r.json()}).then(function(j){ if(j&&j.ok){syncState='Synced to Drive';} else {syncState='Sync error: '+((j&&j.error)||'unknown');} setSync(syncState); })
+   .then(function(r){return r.json()}).then(function(j){ if(j&&j.ok){syncOk();} else {syncState=errText(j&&j.error); render();} })
    .catch(function(){ syncState='Offline · saved on phone'; setSync(syncState); });
 }
 function pull(){
-  if(!SYNC.url) return Promise.resolve();
+  if(!SYNC.url||!SYNC.key) return Promise.resolve();
   setSync('Syncing…'); pulling=true;
   return fetch(SYNC.url+(SYNC.url.indexOf('?')<0?'?':'&')+'key='+encodeURIComponent(SYNC.key)+'&t='+Date.now())
    .then(function(r){return r.json()})
    .then(function(j){
      pulling=false;
-     if(!j||j.error){ syncState='Sync error: '+((j&&j.error)||'unknown'); setSync(syncState); return; }
+     if(!j||j.error){ syncState=errText(j&&j.error); render(); return; }
      var remote=j.data||{};
-     if(!isEmpty(remote) && (isEmpty(S) || (remote.savedAt||0)>(S.savedAt||0))){ S=normalise(remote); persistLocal(); if(j.applied) flash='Claude updated your dashboard ('+j.applied+' change'+(j.applied==1?'':'s')+').'; render(); syncState='Synced to Drive'; setSync(syncState); }
+     if(!isEmpty(remote) && (isEmpty(S) || (remote.savedAt||0)>(S.savedAt||0))){ S=normalise(remote); persistLocal(); if(j.applied) flash='Claude updated your dashboard ('+j.applied+' change'+(j.applied==1?'':'s')+').'; render(); syncOk(); }
      else if((S.savedAt||0)>(remote.savedAt||0)){ push(); }
-     else { syncState='Synced to Drive'; setSync(syncState); }
+     else { syncOk(); }
    }).catch(function(){ pulling=false; syncState='Offline · saved on phone'; setSync(syncState); });
 }
 function normalise(x){
@@ -206,13 +213,13 @@ function normalise(x){
   x.bills.forEach(function(b){ if(!b.freq) b.freq='once'; }); return x;
 }
 function settingsSheet(){
-  sheet('Settings','Connect Google Drive so your data is backed up and Claude can update it.',[
-    {name:'url',label:'Google script URL',value:SYNC.url,req:false},
-    {name:'key',label:'Secret key (same as in the script)',value:SYNC.key,req:false},
+  sheet('Settings','Enter your PIN to connect to Google Drive. Your data is backed up there and Claude can update it.',[
+    {name:'key',label:'PIN',type:'password',im:'numeric',value:SYNC.key,req:false},
+    {name:'url',label:'Google script URL (already filled in)',value:SYNC.url,req:false},
     {name:'payday',label:'Payday',options:['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'],value:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][S.payday==null?4:S.payday]}],
-    function(d){ var nu={url:(d.url||'').trim(),key:(d.key||'').trim()}; var changed=nu.url!=SYNC.url||nu.key!=SYNC.key; SYNC=nu; try{localStorage.setItem('fd_sync',JSON.stringify(SYNC))}catch(e){}
+    function(d){ var nu={url:(d.url||'').trim()||DEFAULT_URL,key:(d.key||'').trim()}; var changed=nu.url!=SYNC.url||nu.key!=SYNC.key; SYNC=nu; try{localStorage.setItem('fd_sync',JSON.stringify(SYNC))}catch(e){}
       S.payday=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].indexOf(d.payday);
-      if(changed&&SYNC.url){ clearTimeout(timer); connecting=true; } });
+      if(changed&&SYNC.key){ clearTimeout(timer); syncState=''; connecting=true; } });
   var acts=document.querySelector('#sf .acts');
   var extra=document.createElement('div'); extra.style.cssText='display:flex;gap:10px;margin:4px 0 12px';
   extra.innerHTML='<button type="button" class="btn ghost" id="bk">Copy backup</button><button type="button" class="btn ghost" id="rs">Restore backup</button>';
@@ -328,7 +335,7 @@ function inRange(d){
 /* ---------- views ---------- */
 function header(title){
   var h=new Date().getHours(), g=h<12?'Good morning':h<18?'Good afternoon':'Good evening';
-  return '<header class="top'+(isLife()?' life':'')+'"><div class="toprow"><div class="mode"><button data-mode="work" class="'+(isLife()?'':'on')+'">Work</button><button data-mode="life" class="'+(isLife()?'on':'')+'">Life</button></div><span style="display:flex;align-items:center;gap:10px"><span class="sync" id="sync"></span><button class="gear" data-settings aria-label="Settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button></span></div><div class="hi">'+g+', Freddie · '+new Date().toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'long'})+'</div><h1>'+title+'</h1></header>'+(flash?'<div class="notice">'+esc(flash)+'</div>':'');
+  return '<header class="top'+(isLife()?' life':'')+'"><div class="toprow"><div class="mode"><button data-mode="work" class="'+(isLife()?'':'on')+'">Work</button><button data-mode="life" class="'+(isLife()?'on':'')+'">Life</button></div><span style="display:flex;align-items:center;gap:10px"><span class="sync" id="sync"></span><button class="gear" data-settings aria-label="Settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button></span></div><div class="hi">'+g+', Freddie · '+new Date().toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'long'})+'</div><h1>'+title+'</h1></header>'+(needsConnect()?'<button class="warn" data-settings>'+(SYNC.key?esc(syncState)+'. Tap to fix':'Not connected to Drive. Tap to connect')+'</button>':'')+(flash?'<div class="notice">'+esc(flash)+'</div>':'');
 }
 function weekDays(){var ws=weekStart(new Date());return S.days.filter(function(d){return d.date>=ws})}
 function vToday(){
@@ -445,7 +452,7 @@ function sheet(title, sub, fields, onSave, onDelete){
   var h='<div class="sheet-bg" id="sb"><form class="sheet" id="sf"><h3>'+title+'</h3>'+(sub?'<p class="sub">'+sub+'</p>':'')+fields.map(function(f){
     if(f.options) return '<label class="f">'+f.label+'<select name="'+f.name+'">'+f.options.map(function(o){return '<option'+(o==f.value?' selected':'')+'>'+esc(o)+'</option>'}).join('')+'</select></label>';
     if(f.check) return '<label class="f" style="display:flex;gap:10px;align-items:center"><input type="checkbox" name="'+f.name+'" checked style="width:auto">'+f.label+'</label>';
-    return '<label class="f">'+f.label+'<input name="'+f.name+'" type="'+(f.type||'text')+'" '+(f.step?'step="'+f.step+'" ':'')+'value="'+esc(f.value==null?'':f.value)+'" '+(f.req!==false?'required':'')+'></label>'}).join('')+
+    return '<label class="f">'+f.label+'<input name="'+f.name+'" type="'+(f.type||'text')+'" '+(f.im?'inputmode="'+f.im+'" autocomplete="off" ':'')+(f.step?'step="'+f.step+'" ':'')+'value="'+esc(f.value==null?'':f.value)+'" '+(f.req!==false?'required':'')+'></label>'}).join('')+
     '<div class="acts">'+(onDelete?'<button type="button" class="danger" id="sdel">Delete</button>':'')+'<button type="button" class="btn ghost" id="scancel">Cancel</button><button class="btn" type="submit">Save</button></div></form></div>';
   var el=document.getElementById('sheet'); el.innerHTML=h;
   var close=function(){el.innerHTML=''};
@@ -484,7 +491,7 @@ function render(){
   var app=document.getElementById('app'); app.innerHTML=v; app.className='wrap'+(isLife()?' lifemode':'');
   document.getElementById('nav').className='tabs'+(isLife()?' life':'');
   document.getElementById('tabs').innerHTML=(isLife()?LIFE_TABS:WORK_TABS).map(function(t){return '<button class="'+(t==tab?'on':'')+'" data-tab="'+t+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+ICONS[t]+'</svg>'+TAB_LABEL[t]+'</button>'}).join('');
-  setSync(SYNC.url?(syncState||'Synced to Drive'):'Saved on this phone');
+  setSync(SYNC.key?(syncState||'Syncing…'):'Not connected');
   var df=document.getElementById('dayForm'); if(df) df.onsubmit=function(e){e.preventDefault();var d={};new FormData(df).forEach(function(v,k){d[k]=v});
     var ex=S.days.find(function(x){return x.date==d.date}); var rec={date:d.date,hours:+d.hours,retail:+d.retail,stops:+d.stops||0,buyers:+d.buyers||0};
     if(ex)Object.assign(ex,rec); else S.days.push(Object.assign({id:uid()},rec)); save(); render();};
@@ -524,7 +531,7 @@ window.addEventListener('hashchange',function(){var h=location.hash.slice(1); if
 render();
 pull();
 document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='visible') pull(); });
-if(!SYNC.url && !S.savedAt){ setTimeout(settingsSheet,400); }
+if(!SYNC.key){ setTimeout(settingsSheet,400); }
 })();
 </script>
 </body>
