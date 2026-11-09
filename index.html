@@ -503,8 +503,9 @@ function vToday(){
     '</div></div>';
   // TODAY
   var td=todayLine(w);
+  if(!(td&&(td.s.hours||td.s.retail))){ var md=S.days.find(function(x){return x.date==iso()}); if(md) td={label:'Today',manual:1,s:{retail:+md.retail||0,hours:+md.hours||0,rph:md.hours?md.retail/md.hours:0,stops:+md.stops||0,buyers:+md.buyers||0,medals:+md.medals||0,ups:+md.ups||0,upsAmt:+md.upsAmt||0}}; }
   o+='<div class="sec"><div class="sh"><h3>Today</h3><button data-logday>+ Log manually</button></div><div class="box">'+
-    (td&&(td.s.hours||td.s.retail)?'<div class="r"><div style="display:flex;justify-content:space-between;align-items:baseline"><div class="vv" style="margin:0">'+money(td.s.retail)+'</div><span class="pill">'+zone(td.s.rph)[0]+' · '+money(td.s.rph)+'/hr</span></div><div class="ss">'+td.s.hours+' hrs · '+td.s.stops+' stops · '+td.s.buyers+' buyers</div></div>'
+    (td&&(td.s.hours||td.s.retail)?'<div class="r"><div style="display:flex;justify-content:space-between;align-items:baseline"><div class="vv" style="margin:0">'+money(td.s.retail)+'</div><span class="pill">'+zone(td.s.rph)[0]+' · '+money(td.s.rph)+'/hr</span></div><div class="ss">'+td.s.hours+' hrs · '+td.s.stops+' stops · '+td.s.buyers+' buyers'+(td.s.buyers?' · '+money(td.s.retail/td.s.buyers)+' avg':'')+(td.s.ups?' · '+td.s.ups+' upsells':'')+(td.s.medals?' · '+td.s.medals+' medal'+(td.s.medals>1?'s':''):'')+(td.manual?' · logged manually':'')+'</div></div>'
       :'<div class="r"><div class="ss">No results for today yet. They\'ll appear once the KPI sheet is updated.</div></div>')+
     '</div></div>';
   // GOALS
