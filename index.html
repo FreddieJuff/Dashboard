@@ -145,6 +145,7 @@ header.top,header.top.life{background:none;color:var(--ink);margin:0 0 6px;paddi
 .mode button.on,header.top.life .mode button.on{background:var(--segon);color:var(--segontx)}
 .sync{opacity:1;color:var(--muted);font-size:12px;display:flex;align-items:center;gap:6px}
 .sync:before{content:"";width:6px;height:6px;border-radius:50%;background:var(--ok);display:inline-block}
+.switch{background:none;border:1px solid var(--line);color:var(--muted);font-size:12px;font-weight:600;padding:7px 12px;border-radius:99px;letter-spacing:.02em}
 .gear{background:var(--card);color:var(--muted);border:1px solid var(--line)}
 .hdate{font-size:12px;letter-spacing:.14em;color:var(--muted);font-weight:600;text-transform:uppercase}
 header.top h1{font-size:34px;font-weight:700;letter-spacing:-.035em;line-height:1.05;margin-top:6px}
@@ -237,8 +238,8 @@ var CATS={
 };
 var CAT_NAMES=Object.keys(CATS);
 var tab='today', areaFilter='All', spendRange='month', catOpen=null, art=null, timer=null, flash='';
-try{ tab=(location.hash||'').slice(1)||localStorage.getItem('fd_tab')||'today'; }catch(e){}
-if(WORK_TABS.concat(LIFE_TABS).indexOf(tab)<0) tab='today';
+tab='lifehome';
+try{ history.replaceState(null,'','#lifehome'); }catch(e){}
 function isLife(){return LIFE_TABS.indexOf(tab)>=0}
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
@@ -430,7 +431,7 @@ function inRange(d){
 
 /* ---------- views ---------- */
 function header(title,xl){
-  return '<header class="top"><div class="toprow"><div class="mode"><button data-mode="work" class="'+(isLife()?'':'on')+'">Work</button><button data-mode="life" class="'+(isLife()?'on':'')+'">Life</button></div><span style="display:flex;align-items:center;gap:10px"><span class="sync" id="sync"></span><button class="gear" data-settings aria-label="Settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button></span></div><div class="hdate">'+new Date().toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'long'}).replace(',',' ·')+'</div><h1'+(xl?' class="xl"':'')+'>'+title+'</h1></header>'+(needsConnect()?'<button class="warn" data-settings>'+(SYNC.key?esc(syncState)+'. Tap to fix':'Not connected to Drive. Tap to connect')+'</button>':'')+(flash?'<div class="notice">'+esc(flash)+'</div>':'');
+  return '<header class="top"><div class="toprow"><span class="sync" id="sync"></span><span style="display:flex;align-items:center;gap:8px"><button class="switch" data-mode="'+(isLife()?'work':'life')+'">'+(isLife()?'💼 ELEMNT':'← Life')+'</button><button class="gear" data-settings aria-label="Settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button></span></div><div class="hdate">'+(isLife()?'':'<span style="color:var(--accent)">ELEMNT</span> · ')+new Date().toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'long'}).replace(',',' ·')+'</div><h1'+(xl?' class="xl"':'')+'>'+title+'</h1></header>'+(needsConnect()?'<button class="warn" data-settings>'+(SYNC.key?esc(syncState)+'. Tap to fix':'Not connected to Drive. Tap to connect')+'</button>':'')+(flash?'<div class="notice">'+esc(flash)+'</div>':'');
 }
 function greet(){var h=new Date().getHours();return (h<12?'Morning':h<18?'Afternoon':'Evening')+',<br>Freddie.'}
 function weekDays(){var ws=weekStart(new Date());return S.days.filter(function(d){return d.date>=ws})}
