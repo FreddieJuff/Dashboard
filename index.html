@@ -153,6 +153,7 @@ header.top,header.top.life{background:none;color:var(--ink);margin:0 0 6px;paddi
 .three{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line)}
 .three>div{padding:14px 18px}.three>div+div{border-left:1px solid var(--line)}
 .three .vv{font-size:22px}
+.fab{position:fixed;right:18px;bottom:calc(86px + env(safe-area-inset-bottom));width:54px;height:54px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;box-shadow:0 6px 20px rgba(0,0,0,.25);z-index:15}
 .switch{background:none;border:1px solid var(--line);color:var(--muted);font-size:12px;font-weight:600;padding:7px 12px;border-radius:99px;letter-spacing:.02em}
 .gear{background:var(--card);color:var(--muted);border:1px solid var(--line)}
 .hdate{font-size:12px;letter-spacing:.14em;color:var(--muted);font-weight:600;text-transform:uppercase}
@@ -223,12 +224,12 @@ input,select,textarea{background:var(--bg)}
 (function(){
 var S = {v:2,savedAt:0,incomeTarget:1200,payday:4,days:[],bills:[],income:[],tx:[],rules:{},tasks:[],goals:[],accounts:[]};
 try{ var ls = JSON.parse(localStorage.getItem('fd_state')||'null'); if(ls) S = ls; }catch(e){}
-['days','bills','income','tx','tasks','goals','accounts'].forEach(function(k){ if(!Array.isArray(S[k])) S[k]=[]; });
+['days','bills','income','tx','tasks','goals','accounts','inbox'].forEach(function(k){ if(!Array.isArray(S[k])) S[k]=[]; });
 S.bills.forEach(function(b){ if(!b.freq) b.freq='once'; });
 if(!S.rules||typeof S.rules!=='object') S.rules={};
 if(!S.incomeTarget) S.incomeTarget=1200;
 
-var WORK_AREAS=['Orexis','Geelong'], LIFE_AREAS=['Money','Store','Personal'];
+var WORK_AREAS=['ELEMNT','Orexis','Geelong'], LIFE_AREAS=['Personal','Money','Store','Ideas'];
 var WORK_TABS=['today','goals','worktasks'], LIFE_TABS=['lifehome','money','spending','lifetasks'];
 var TAB_LABEL={lifehome:'Home',today:'Today',goals:'Goals',worktasks:'Tasks',money:'Money',spending:'Spending',lifetasks:'Tasks'};
 var CATS={
@@ -311,7 +312,7 @@ function pull(){
    }).catch(function(){ pulling=false; syncState='Offline · saved on phone'; setSync(syncState); });
 }
 function normalise(x){
-  ['days','bills','income','tx','tasks','goals','accounts'].forEach(function(k){ if(!Array.isArray(x[k])) x[k]=[]; });
+  ['days','bills','income','tx','tasks','goals','accounts','inbox'].forEach(function(k){ if(!Array.isArray(x[k])) x[k]=[]; });
   if(!x.rules||typeof x.rules!=='object') x.rules={}; if(!x.steps||typeof x.steps!=='object') x.steps={}; if(!x.incomeTarget) x.incomeTarget=1200; if(x.payday==null) x.payday=4;
   x.bills.forEach(function(b){ if(!b.freq) b.freq='once'; }); return x;
 }
@@ -585,6 +586,7 @@ function shortDay(d){return parse(d).toLocaleDateString('en-AU',{weekday:'short'
 function vLifeHome(){
   loadWeather();
   var o=header(greet(),1);
+  o+=briefCard()+inboxCard();
   // TODAY
   o+='<div class="sec"><div class="sh"><h3>Today</h3></div><div class="box">';
   if(weather&&weather.j){ var c=weather.j.current, dl=weather.j.daily, w=wx(c.weather_code);
@@ -628,6 +630,27 @@ function vLifeHome(){
   var wd=todaysWord();
   o+='<div class="sec"><div class="box"><div class="r"><div class="lbl">Today\'s word</div><div class="wq">'+esc(wd[0])+'</div><div class="wa">'+esc(wd[1])+'</div></div></div></div>';
   return o;
+}
+function captureSheet(){
+  var el=document.getElementById('sheet');
+  el.innerHTML='<div class="sheet-bg" id="sb"><form class="sheet" id="cf"><h3>What\'s on your mind?</h3><p class="sub">Type or tap the 🎤 on your keyboard. Claude sorts your Inbox a few times a day.</p><textarea name="t" id="ct" rows="3" placeholder="e.g. Call Mum Sunday · Spent $24 fuel · Idea: recruit at uni markets" style="width:100%;font:inherit;font-size:17px;padding:12px;border-radius:14px;border:1px solid var(--line);background:var(--bg);color:var(--ink);resize:none"></textarea><div class="acts" style="margin-top:12px"><button type="button" class="btn ghost" id="cc">Cancel</button><button class="btn" type="submit">Add to Inbox</button></div></form></div>';
+  var close=function(){el.innerHTML=''};
+  document.getElementById('sb').onclick=function(e){if(e.target.id=='sb')close()};
+  document.getElementById('cc').onclick=close;
+  document.getElementById('cf').onsubmit=function(e){e.preventDefault(); var t=document.getElementById('ct').value.trim(); if(!t){close();return;}
+    t.split(/\n+/).map(function(x){return x.trim()}).filter(Boolean).forEach(function(x){ S.inbox.push({id:uid(),text:x,at:Date.now()}); });
+    close(); flash='Added to Inbox'; save(); render(); };
+  setTimeout(function(){var t=document.getElementById('ct'); if(t) t.focus();},60);
+}
+function inboxCard(){
+  if(!S.inbox.length) return '';
+  return '<div class="sec"><div class="sh"><h3>Inbox</h3><span class="ss">'+S.inbox.length+' to sort</span></div><div class="box">'+
+    S.inbox.map(function(i){return '<div class="r" style="display:flex;gap:10px;align-items:center"><span style="font-size:15px;flex:none">'+(i.q?'❓':'📥')+'</span><div style="flex:1;min-width:0"><div style="font-size:15px">'+esc(i.text)+'</div>'+(i.q?'<div class="ss">'+esc(i.note||'Not sure where this goes. Tap × once you\'ve sorted it.')+'</div>':'')+'</div><button class="x" data-del-inbox="'+i.id+'">×</button></div>'}).join('')+
+    '</div><div class="ss" style="padding:8px 6px 0">Claude sorts these into tasks, spending, your calendar and ideas at about 12pm, 6pm and 10pm.</div></div>';
+}
+function briefCard(){
+  var b=S.brief; if(!b||b.date!==iso()||!b.lines||!b.lines.length) return '';
+  return '<div class="sec"><div class="box"><div class="r"><div class="lbl" style="color:var(--accent)">Morning brief</div>'+b.lines.map(function(l){return '<div style="font-size:15px;margin-top:8px;line-height:1.4">'+esc(l)+'</div>'}).join('')+'</div></div></div>';
 }
 function focusSheet(){
   var f=S.focus||{};
@@ -767,6 +790,7 @@ function render(){
   var v={today:vToday,goals:vGoals,worktasks:vTasks,money:vMoney,spending:vSpending,lifetasks:vTasks,lifehome:vLifeHome}[tab]();
   var app=document.getElementById('app'); app.innerHTML=v; app.className='wrap'+(isLife()?' lifemode':'');
   document.getElementById('nav').className='tabs'+(isLife()?' life':'');
+  if(!document.getElementById('fab')){ var fb=document.createElement('button'); fb.id='fab'; fb.className='fab'; fb.setAttribute('aria-label','Quick add'); fb.setAttribute('data-capture',''); fb.innerHTML='<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>'; document.body.appendChild(fb); }
   document.getElementById('tabs').innerHTML=(isLife()?LIFE_TABS:WORK_TABS).map(function(t){return '<button class="'+(t==tab?'on':'')+'" data-tab="'+t+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+ICONS[t]+'</svg>'+TAB_LABEL[t]+'</button>'}).join('');
   setSync(SYNC.key?(syncState||'Syncing…'):'Not connected');
   var df=document.getElementById('dayForm'); if(df) df.onsubmit=function(e){e.preventDefault();var d={};new FormData(df).forEach(function(v,k){d[k]=v});
@@ -780,7 +804,7 @@ function render(){
 }
 function go(t){tab=t;flash='';catOpen=null;try{localStorage.setItem('fd_tab',t)}catch(e){} try{history.replaceState(null,'','#'+t)}catch(e){} window.scrollTo(0,0); render();}
 document.addEventListener('click',function(e){
-  var el=e.target.closest('[data-tab],[data-go],[data-mode],[data-task],[data-del-task],[data-pay],[data-edit-bill],[data-add],[data-week],[data-edit-goal],[data-area],[data-del-day],[data-clear-done],[data-edit-target],[data-range],[data-cat],[data-tx],[data-acc],[data-settings],[data-focus],[data-savings],[data-logday]');
+  var el=e.target.closest('[data-tab],[data-go],[data-mode],[data-task],[data-del-task],[data-pay],[data-edit-bill],[data-add],[data-week],[data-edit-goal],[data-area],[data-del-day],[data-clear-done],[data-edit-target],[data-range],[data-cat],[data-tx],[data-acc],[data-settings],[data-focus],[data-savings],[data-logday],[data-capture],[data-del-inbox]');
   if(!el) return; var ds=el.dataset;
   if('settings' in ds) return settingsSheet();
   if(ds.tab) return go(ds.tab);
@@ -788,6 +812,8 @@ document.addEventListener('click',function(e){
   if(ds.mode) return go(ds.mode=='life'?'lifehome':'today');
   if('focus' in ds) return focusSheet();
   if('logday' in ds) return dayLogSheet();
+  if('capture' in ds) return captureSheet();
+  if(ds.delInbox){ S.inbox=S.inbox.filter(function(x){return x.id!=ds.delInbox}); save(); return render(); }
   if('savings' in ds) return savingsSheet();
   if(ds.task){var t=S.tasks.find(function(x){return x.id==ds.task}); t.done=!t.done; save(); return render();}
   if(ds.delTask){S.tasks=S.tasks.filter(function(x){return x.id!=ds.delTask}); save(); return render();}
