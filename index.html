@@ -20,6 +20,10 @@
   --navy:#0b0b0c; --accent:#ff6a00; --accent-soft:#fff0e5; --ok:#28a745; --ok-soft:#e6f6ea;
   --red:#e0352b; --red-soft:#fdeceb; --life:#ff6a00; --life-soft:#fff0e5; --radius:20px; --seg:#e4e4e8; --segon:#0b0b0c; --segontx:#fff;
 }
+:root[data-theme="elemnt"]{
+  --bg:#ECE6DC; --card:#F8F5F0; --ink:#1c1b1a; --muted:#7d766c; --line:#e4ddd1; --track:#e4ddd1;
+  --accent:#2b2a28; --accent-soft:#e4ddd1; --life:#2b2a28; --life-soft:#e4ddd1; --seg:#e0d9cd; --segon:#2b2a28; --segontx:#F8F5F0;
+}
 :root[data-theme="dark"]{
   --bg:#000; --card:#121214; --ink:#f5f5f7; --muted:#8e8e93; --line:#1f1f22; --track:#26262a;
   --navy:#f5f5f7; --accent-soft:#2a1606; --ok:#30d158; --ok-soft:#0f2a17; --red:#ff453a; --red-soft:#2e1110; --life-soft:#2a1606; --seg:#1c1c1e; --segon:#f5f5f7; --segontx:#000;
@@ -145,6 +149,10 @@ header.top,header.top.life{background:none;color:var(--ink);margin:0 0 6px;paddi
 .mode button.on,header.top.life .mode button.on{background:var(--segon);color:var(--segontx)}
 .sync{opacity:1;color:var(--muted);font-size:12px;display:flex;align-items:center;gap:6px}
 .sync:before{content:"";width:6px;height:6px;border-radius:50%;background:var(--ok);display:inline-block}
+.brand{display:flex;align-items:center;gap:8px;font-weight:800;font-size:14px;letter-spacing:.18em}
+.three{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line)}
+.three>div{padding:14px 18px}.three>div+div{border-left:1px solid var(--line)}
+.three .vv{font-size:22px}
 .switch{background:none;border:1px solid var(--line);color:var(--muted);font-size:12px;font-weight:600;padding:7px 12px;border-radius:99px;letter-spacing:.02em}
 .gear{background:var(--card);color:var(--muted);border:1px solid var(--line)}
 .hdate{font-size:12px;letter-spacing:.14em;color:var(--muted);font-weight:600;text-transform:uppercase}
@@ -263,8 +271,9 @@ var ERR={'wrong pin':'Wrong PIN','wrong key':'Wrong PIN','locked':'Too many wron
 function errText(e){ return ERR[e]||('Sync error: '+(e||'unknown')); }
 function applyTheme(){
   var m=S.theme||'auto', dark=m=='dark'||(m=='auto'&&window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches);
-  document.documentElement.setAttribute('data-theme',dark?'dark':'light');
-  var tc=document.querySelector('meta[name=theme-color]'); if(tc) tc.setAttribute('content',dark?'#000000':'#f2f2f4');
+  var th=!isLife()?'elemnt':dark?'dark':'light';
+  document.documentElement.setAttribute('data-theme',th);
+  var tc=document.querySelector('meta[name=theme-color]'); if(tc) tc.setAttribute('content',th=='elemnt'?'#ECE6DC':dark?'#000000':'#f2f2f4');
 }
 try{ matchMedia('(prefers-color-scheme: dark)').addEventListener('change',function(){applyTheme()}); }catch(e){}
 function syncOk(){ syncState='Synced to Drive'; if(document.querySelector('.warn')) render(); else setSync(syncState); }
@@ -431,7 +440,7 @@ function inRange(d){
 
 /* ---------- views ---------- */
 function header(title,xl){
-  return '<header class="top"><div class="toprow"><span class="sync" id="sync"></span><span style="display:flex;align-items:center;gap:8px"><button class="switch" data-mode="'+(isLife()?'work':'life')+'">'+(isLife()?'💼 ELEMNT':'← Life')+'</button><button class="gear" data-settings aria-label="Settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button></span></div><div class="hdate">'+(isLife()?'':'<span style="color:var(--accent)">ELEMNT</span> · ')+new Date().toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'long'}).replace(',',' ·')+'</div><h1'+(xl?' class="xl"':'')+'>'+title+'</h1></header>'+(needsConnect()?'<button class="warn" data-settings>'+(SYNC.key?esc(syncState)+'. Tap to fix':'Not connected to Drive. Tap to connect')+'</button>':'')+(flash?'<div class="notice">'+esc(flash)+'</div>':'');
+  return '<header class="top"><div class="toprow">'+(isLife()?'<span class="sync" id="sync"></span>':'<span class="brand"><svg width="18" height="16" viewBox="0 0 18 16"><rect y="0" width="18" height="3.2" fill="currentColor"/><rect y="6.4" width="18" height="3.2" fill="currentColor"/><rect y="12.8" width="18" height="3.2" fill="currentColor"/></svg>ELEMNT<span style="font-weight:500;color:var(--muted)">&nbsp;GROUP</span></span>')+'<span style="display:flex;align-items:center;gap:8px"><button class="switch" data-mode="'+(isLife()?'work':'life')+'">'+(isLife()?'💼 ELEMNT':'← Life')+'</button><button class="gear" data-settings aria-label="Settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button></span></div><div class="hdate">'+new Date().toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'long'}).replace(',',' ·')+(isLife()?'':' · <span class="sync" id="sync" style="display:inline-flex;letter-spacing:0;text-transform:none"></span>')+'</div><h1'+(xl?' class="xl"':'')+'>'+title+'</h1></header>'+(needsConnect()?'<button class="warn" data-settings>'+(SYNC.key?esc(syncState)+'. Tap to fix':'Not connected to Drive. Tap to connect')+'</button>':'')+(flash?'<div class="notice">'+esc(flash)+'</div>':'');
 }
 function greet(){var h=new Date().getHours();return (h<12?'Morning':h<18?'Afternoon':'Evening')+',<br>Freddie.'}
 function weekDays(){var ws=weekStart(new Date());return S.days.filter(function(d){return d.date>=ws})}
@@ -462,32 +471,59 @@ function kpiCard(){
   o+='<div class="muted" style="margin-top:10px">From '+esc(k.sheet)+' · read-only · refreshes every 10 min</div></div>';
   return o;
 }
-function vToday(){
-  var wd=weekDays(), r=0,h=0; wd.forEach(function(d){r+=+d.retail||0;h+=+d.hours||0});
-  var rph=h?r/h:0, z=zone(rph);
-  var open=S.tasks.filter(function(t){return !t.done&&WORK_AREAS.indexOf(t.area)>=0}).slice(0,3);
-  var recent=S.days.slice().sort(function(a,b){return a.date<b.date?1:-1}).slice(0,7);
-  var o=header(greet(),1);
-  o+=kpiCard();
-  o+='<div class="card"><h2>Manual log · this week <span class="badge '+(h?z[1]:'z-silver')+'">'+(h?z[0]+' zone':'No days yet')+'</span></h2><div class="stats">'+
-     '<div class="stat"><div class="v">'+money(r)+'</div><div class="l">Retail</div></div>'+
-     '<div class="stat"><div class="v">'+money(rph)+'</div><div class="l">Avg / hour</div></div>'+
-     '<div class="stat"><div class="v">'+wd.length+'</div><div class="l">Days logged</div></div></div>'+
-     '<div class="bar'+(rph>=120?' ok':'')+'"><i style="width:'+Math.min(100,rph/120*100)+'%"></i></div><div class="muted" style="margin-top:6px">Gold zone = $120/hr ($720 on a 6-hour day)</div></div>';
-  o+='<div class="card"><h2>Log a field day</h2><form id="dayForm"><div class="grid2">'+
-     '<label class="f">Date<input type="date" name="date" value="'+iso()+'" required></label>'+
-     '<label class="f">Hours<input type="number" step="0.25" name="hours" value="6" required></label>'+
-     '<label class="f">Retail $<input type="number" step="1" name="retail" inputmode="decimal" required></label>'+
-     '<label class="f">Stops<input type="number" name="stops" inputmode="numeric"></label></div>'+
-     '<label class="f">Buyers<input type="number" name="buyers" inputmode="numeric"></label>'+
-     '<button class="btn" type="submit">Save day</button></form></div>';
-  o+='<div class="card"><h2>Top work to-dos <button class="link" data-go="worktasks">All</button></h2>'+(open.length?open.map(taskRow).join(''):'<div class="empty">All clear.</div>')+'</div>';
-  if(recent.length){
-    o+='<div class="card"><h2>Recent days</h2>'+recent.map(function(d){var rp=d.hours?d.retail/d.hours:0,zz=zone(rp);
-      var conv=(d.stops&&d.buyers)?' · '+Math.round(d.buyers/d.stops*100)+'% conv':'';
-      return '<div class="row"><div class="grow"><div class="t">'+fmtDate(d.date)+' · '+money(d.retail)+'</div><div class="s">'+d.hours+'h · '+money(rp)+'/hr'+conv+'</div></div><span class="badge '+zz[1]+'">'+zz[0]+'</span><button class="x" data-del-day="'+d.id+'">×</button></div>'}).join('')+'</div>';
+function workWeek(){
+  // prefer KPI sheet, fall back to manual log
+  if(kpi&&kpi.v&&!kpi.v.error&&kpi.v.blocks){
+    var bl=kpi.v.blocks, wk=bl.find(function(b){return /weekly|total/i.test(b.label)})||null;
+    var days=bl.filter(function(b){return b!==wk}).map(function(b){return {label:b.label,s:kstats(b.fields)}});
+    var t=wk?kstats(wk.fields):days.reduce(function(a,d){for(var x in d.s)a[x]=(a[x]||0)+d.s[x];return a},{retail:0,hours:0,stops:0,buyers:0,medals:0,ups:0,upsAmt:0});
+    if(!t.rph&&t.hours) t.rph=t.retail/t.hours;
+    return {src:'sheet',sheet:kpi.v.sheet,prev:kpi.v.prev,t:t,days:days};
   }
+  var wd=weekDays(), t={retail:0,hours:0,stops:0,buyers:0,medals:0,ups:0,upsAmt:0};
+  wd.forEach(function(d){t.retail+=+d.retail||0;t.hours+=+d.hours||0;t.stops+=+d.stops||0;t.buyers+=+d.buyers||0});
+  t.rph=t.hours?t.retail/t.hours:0;
+  return {src:'manual',t:t,days:wd.map(function(d){return {label:fmtDate(d.date),date:d.date,s:{retail:+d.retail||0,hours:+d.hours||0,rph:d.hours?d.retail/d.hours:0,stops:+d.stops||0,buyers:+d.buyers||0}}})};
+}
+function todayLine(w){
+  var d=new Date(), dn=d.toLocaleDateString('en-AU',{weekday:'long'}).toLowerCase(), ds=d.getDate()+'/'+(d.getMonth()+1);
+  return w.days.find(function(x){ if(x.date) return x.date==iso(); var l=(x.label||'').toLowerCase(); return l.indexOf(dn)>=0||l.indexOf(dn.slice(0,3))===0||l.indexOf(ds)>=0; });
+}
+function vToday(){
+  var w=workWeek(), t=w.t, z=zone(t.rph), gap=Math.max(0,120*t.hours-t.retail);
+  var conv=t.stops?Math.round(t.buyers/t.stops*100):0, avg=t.buyers?t.retail/t.buyers:0;
+  var o=header(greet(),1);
+  // THIS WEEK
+  o+='<div class="sec"><div class="sh"><h3>'+(w.prev?'Last week':'This week')+'</h3>'+(w.src=='sheet'?'<span class="ss">'+esc(w.sheet)+'</span>':'')+'</div><div class="box">'+
+    '<div class="r fx">'+ringSvg(88,6,t.rph/120,'var(--accent)','<div><b style="font-size:20px">'+(t.hours?Math.round(t.rph):'–')+'</b><small>$ / HR</small></div>')+
+    '<div><div class="lbl">Retail</div><div class="hero"><div class="num" style="font-size:44px;margin-top:4px"><span style="font-size:22px;top:4px">$</span>'+Math.round(t.retail).toLocaleString('en-AU')+'</div></div>'+
+    '<div class="ss">'+(t.hours?t.hours+' hrs · '+z[0]+' zone'+(t.rph>=120?' · gold ✓':' · '+money(gap)+' to gold'):'No hours yet this week')+'</div></div></div>'+
+    '<div class="three"><div><div class="lbl">Stops</div><div class="vv">'+t.stops+'</div></div><div><div class="lbl">Buyers</div><div class="vv">'+t.buyers+'</div><div class="ss">'+conv+'% conv</div></div><div><div class="lbl">Avg</div><div class="vv">'+money(avg)+'</div><div class="ss">per buyer</div></div></div>'+
+    (w.src=='sheet'?'<div class="three"><div><div class="lbl">Medals</div><div class="vv">'+t.medals+'</div></div><div><div class="lbl">Upsells</div><div class="vv">'+t.ups+'</div></div><div><div class="lbl">Upsell $</div><div class="vv">'+money(t.upsAmt)+'</div></div></div>':'')+
+    '</div></div>';
+  // TODAY
+  var td=todayLine(w);
+  o+='<div class="sec"><div class="sh"><h3>Today</h3><button data-logday>+ Log manually</button></div><div class="box">'+
+    (td&&(td.s.hours||td.s.retail)?'<div class="r"><div style="display:flex;justify-content:space-between;align-items:baseline"><div class="vv" style="margin:0">'+money(td.s.retail)+'</div><span class="pill">'+zone(td.s.rph)[0]+' · '+money(td.s.rph)+'/hr</span></div><div class="ss">'+td.s.hours+' hrs · '+td.s.stops+' stops · '+td.s.buyers+' buyers</div></div>'
+      :'<div class="r"><div class="ss">No results for today yet. They\'ll appear once the KPI sheet is updated.</div></div>')+
+    '</div></div>';
+  // GOALS
+  o+='<div class="sec"><div class="sh"><h3>Goals</h3><button data-go="goals">All ›</button></div><div class="box">'+
+    (S.goals.length?S.goals.slice(0,4).map(function(g){var p=g.target?g.cur/g.target:0;return '<div class="r fx tap" data-edit-goal="'+g.id+'">'+ringSvg(44,4,p,'var(--accent)','<div style="font-size:10px;font-weight:700">'+Math.round(p*100)+'%</div>')+'<div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600">'+esc(g.title)+'</div><div class="ss">'+(g.unit||'')+(+g.cur).toLocaleString('en-AU')+' of '+(g.unit||'')+(+g.target).toLocaleString('en-AU')+'</div></div></div>'}).join('')
+      :'<div class="r tap" data-add="goal"><div class="ss">+ Add a goal</div></div>')+'</div></div>';
+  // TEAM
+  var rec=S.goals.find(function(g){return /recruit/i.test(g.title)}), lead=S.goals.find(function(g){return /leader/i.test(g.title)});
+  o+='<div class="sec"><div class="sh"><h3>Team</h3></div><div class="box">'+
+    '<div class="three" style="border-top:0"><div><div class="lbl">Team</div><div class="vv">'+((S.team||[]).length)+'</div></div><div><div class="lbl">Recruits</div><div class="vv">'+(rec?rec.cur:0)+'</div></div><div><div class="lbl">Leaders</div><div class="vv">'+(lead?lead.cur:0)+'</div></div></div>'+
+    '<div class="r"><div class="ss">No one on the team yet. As you recruit in Geelong, each person will appear here with their week.</div></div></div></div>';
+  // TO-DOS
+  var open=S.tasks.filter(function(t){return !t.done&&WORK_AREAS.indexOf(t.area)>=0}).slice(0,3);
+  o+='<div class="sec"><div class="sh"><h3>To-dos</h3><button data-go="worktasks">All ›</button></div><div class="box"><div style="padding:2px 18px">'+(open.length?open.map(taskRow).join(''):'<div class="empty" style="padding:14px 0">All clear.</div>')+'</div></div></div>';
   return o;
+}
+function dayLogSheet(){
+  sheet('Log a field day','Only needed if the KPI sheet misses a day.',[{name:'date',label:'Date',type:'date',value:iso()},{name:'hours',label:'Hours',type:'number',step:'0.25',value:6},{name:'retail',label:'Retail $',type:'number',step:'1'},{name:'stops',label:'Stops',type:'number',req:false},{name:'buyers',label:'Buyers',type:'number',req:false}],
+    function(d){ var ex=S.days.find(function(x){return x.date==d.date}); var rec={date:d.date,hours:+d.hours,retail:+d.retail,stops:+d.stops||0,buyers:+d.buyers||0}; if(ex)Object.assign(ex,rec); else S.days.push(Object.assign({id:uid()},rec)); });
 }
 function dueText(d){var n=daysUntil(d); if(n<0) return 'Overdue by '+(-n)+' day'+(n==-1?'':'s'); if(n==0) return 'Due today'; if(n==1) return 'Due tomorrow'; return 'Due '+fmtDate(d)+' · in '+n+' days';}
 /* ---------- Life Home ---------- */
@@ -743,13 +779,14 @@ function render(){
 }
 function go(t){tab=t;flash='';catOpen=null;try{localStorage.setItem('fd_tab',t)}catch(e){} try{history.replaceState(null,'','#'+t)}catch(e){} window.scrollTo(0,0); render();}
 document.addEventListener('click',function(e){
-  var el=e.target.closest('[data-tab],[data-go],[data-mode],[data-task],[data-del-task],[data-pay],[data-edit-bill],[data-add],[data-week],[data-edit-goal],[data-area],[data-del-day],[data-clear-done],[data-edit-target],[data-range],[data-cat],[data-tx],[data-acc],[data-settings],[data-focus],[data-savings]');
+  var el=e.target.closest('[data-tab],[data-go],[data-mode],[data-task],[data-del-task],[data-pay],[data-edit-bill],[data-add],[data-week],[data-edit-goal],[data-area],[data-del-day],[data-clear-done],[data-edit-target],[data-range],[data-cat],[data-tx],[data-acc],[data-settings],[data-focus],[data-savings],[data-logday]');
   if(!el) return; var ds=el.dataset;
   if('settings' in ds) return settingsSheet();
   if(ds.tab) return go(ds.tab);
   if(ds.go) return go(ds.go);
   if(ds.mode) return go(ds.mode=='life'?'lifehome':'today');
   if('focus' in ds) return focusSheet();
+  if('logday' in ds) return dayLogSheet();
   if('savings' in ds) return savingsSheet();
   if(ds.task){var t=S.tasks.find(function(x){return x.id==ds.task}); t.done=!t.done; save(); return render();}
   if(ds.delTask){S.tasks=S.tasks.filter(function(x){return x.id!=ds.delTask}); save(); return render();}
