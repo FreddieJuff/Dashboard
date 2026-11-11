@@ -481,8 +481,10 @@ function sheetDate(label,dates){
   return null;
 }
 function workWeek(){
-  var dates=weekDates(), sheetDays={}, sheetWeek=null, sheetName='', useSheet=kpi&&kpi.v&&!kpi.v.error&&kpi.v.blocks&&!kpi.v.prev;
-  if(useSheet){ sheetName=kpi.v.sheet;
+  var dates=weekDates(), sheetDays={}, sheetWeek=null, sheetName='', useSheet=kpi&&kpi.v&&!kpi.v.error&&((kpi.v.blocks&&!kpi.v.prev)||kpi.v.entries);
+  if(useSheet&&kpi.v.entries){ sheetName=kpi.v.sheet||'KPI app';
+    kpi.v.entries.forEach(function(e){ if(dates.indexOf(e.date)>=0&&(e.hours||e.retail)) sheetDays[e.date]={retail:e.retail,hours:e.hours,stops:e.stops,buyers:e.buyers,medals:e.medals,ups:e.ups,upsAmt:e.upsAmt,rph:e.hours?e.retail/e.hours:0}; });
+  } else if(useSheet){ sheetName=kpi.v.sheet;
     kpi.v.blocks.forEach(function(b){ if(/weekly|total/i.test(b.label)){ sheetWeek=kstats(b.fields); return; } var d=sheetDate(b.label,dates); if(d){ var st=kstats(b.fields); if(st.hours||st.retail) sheetDays[d]=st; } });
   }
   var days=[];
@@ -503,10 +505,10 @@ function vToday(){
   var conv=t.stops?Math.round(t.buyers/t.stops*100):0, avg=t.buyers?t.retail/t.buyers:0;
   var o=header(greet(),1);
   // THIS WEEK
-  o+='<div class="sec"><div class="sh"><h3>This week</h3><span class="ss">'+(w.hasSheet?'KPI sheet + manual':'Manual log')+'</span></div><div class="box">'+
+  o+='<div class="sec"><div class="sh"><h3>This week</h3><span class="ss">'+(w.hasSheet?'KPI app + manual':'Manual log')+'</span></div><div class="box">'+
     '<div class="r fx">'+ringSvg(88,6,t.rph/120,'var(--accent)','<div><b style="font-size:20px">'+(t.hours?Math.round(t.rph):'–')+'</b><small>$ / HR</small></div>')+
     '<div><div class="lbl">Retail</div><div class="hero"><div class="num" style="font-size:44px;margin-top:4px"><span style="font-size:22px;top:4px">$</span>'+Math.round(t.retail).toLocaleString('en-AU')+'</div></div>'+
-    '<div class="ss">'+(t.hours?t.hours+' hrs · '+z[0]+' zone'+(t.rph>=120?' · gold ✓':' · '+money(gap)+' to gold'):'No hours yet this week')+'</div></div></div>'+
+    '<div class="ss">'+(t.hours?t.hours+' hrs · '+z[0]+' zone'+(t.rph>=120?' ✓':' · '+money(gap)+' to gold'):'No hours yet this week')+'</div></div></div>'+
     '<div class="three"><div><div class="lbl">Stops</div><div class="vv">'+t.stops+'</div></div><div><div class="lbl">Buyers</div><div class="vv">'+t.buyers+'</div><div class="ss">'+conv+'% conv</div></div><div><div class="lbl">Avg</div><div class="vv">'+money(avg)+'</div><div class="ss">per buyer</div></div></div>'+
     ((t.medals||t.ups)?'<div class="three"><div><div class="lbl">Medals</div><div class="vv">'+t.medals+'</div></div><div><div class="lbl">Upsells</div><div class="vv">'+t.ups+'</div></div><div><div class="lbl">Upsell $</div><div class="vv">'+money(t.upsAmt)+'</div></div></div>':'')+
     '</div></div>';
@@ -514,8 +516,8 @@ function vToday(){
   var td=todayLine(w);
 
   o+='<div class="sec"><div class="sh"><h3>Today</h3><button data-logday>+ Log manually</button></div><div class="box">'+
-    (td&&(td.s.hours||td.s.retail)?'<div class="r"><div style="display:flex;justify-content:space-between;align-items:baseline"><div class="vv" style="margin:0">'+money(td.s.retail)+'</div><span class="pill">'+zone(td.s.rph)[0]+' · '+money(td.s.rph)+'/hr</span></div><div class="ss">'+td.s.hours+' hrs · '+td.s.stops+' stops · '+td.s.buyers+' buyers'+(td.s.buyers?' · '+money(td.s.retail/td.s.buyers)+' avg':'')+(td.s.ups?' · '+td.s.ups+' upsells':'')+(td.s.medals?' · '+td.s.medals+' medal'+(td.s.medals>1?'s':''):'')+(td.src=='manual'?' · logged manually':'')+'</div></div>'
-      :'<div class="r"><div class="ss">No results for today yet. They\'ll appear once the KPI sheet is updated.</div></div>')+
+    (td&&(td.s.hours||td.s.retail)?'<div class="r"><div style="display:flex;justify-content:space-between;align-items:baseline"><div class="vv" style="margin:0">'+money(td.s.retail)+'</div><span class="pill">'+zone(td.s.rph)[0]+' · '+money(td.s.rph)+'/hr</span></div><div class="ss">'+td.s.hours+' hrs · '+td.s.stops+' stops · '+td.s.buyers+' buyers'+(td.s.buyers?' · '+money(td.s.retail/td.s.buyers)+' avg':'')+(td.s.ups?' · '+td.s.ups+' upsell'+(td.s.ups>1?'s':''):'')+(td.s.medals?' · '+td.s.medals+' medal'+(td.s.medals>1?'s':''):'')+(td.src=='manual'?' · logged manually':'')+'</div></div>'
+      :'<div class="r"><div class="ss">No results for today yet. They\'ll appear once you enter them in the KPI app, or tap + Log manually.</div></div>')+
     '</div></div>';
   // DAYS
   if(w.days.length) o+='<div class="sec"><div class="sh"><h3>This week\'s days</h3></div><div class="box">'+w.days.map(function(d){var z=zone(d.s.rph);
