@@ -472,43 +472,54 @@ function kpiCard(){
   o+='<div class="muted" style="margin-top:10px">From '+esc(k.sheet)+' · read-only · refreshes every 10 min</div></div>';
   return o;
 }
+function weekDates(){ var m=parse(weekStart(new Date())), out=[]; for(var k=0;k<7;k++){ var d=new Date(m); d.setDate(m.getDate()+k); out.push(iso(d)); } return out; }
+var DAYN=['mon','tue','wed','thu','fri','sat','sun'];
+function sheetDate(label,dates){
+  var l=(label||'').toLowerCase(), m=l.match(/(\d{1,2})[\/\-.](\d{1,2})/);
+  if(m){ var hit=dates.find(function(d){var p=parse(d);return p.getDate()==+m[1]&&p.getMonth()+1==+m[2]}); if(hit) return hit; }
+  for(var k=0;k<7;k++) if(l.indexOf(DAYN[k])>=0) return dates[k];
+  return null;
+}
 function workWeek(){
-  // prefer KPI sheet, fall back to manual log
-  if(kpi&&kpi.v&&!kpi.v.error&&kpi.v.blocks){
-    var bl=kpi.v.blocks, wk=bl.find(function(b){return /weekly|total/i.test(b.label)})||null;
-    var days=bl.filter(function(b){return b!==wk}).map(function(b){return {label:b.label,s:kstats(b.fields)}});
-    var t=wk?kstats(wk.fields):days.reduce(function(a,d){for(var x in d.s)a[x]=(a[x]||0)+d.s[x];return a},{retail:0,hours:0,stops:0,buyers:0,medals:0,ups:0,upsAmt:0});
-    if(!t.rph&&t.hours) t.rph=t.retail/t.hours;
-    return {src:'sheet',sheet:kpi.v.sheet,prev:kpi.v.prev,t:t,days:days};
+  var dates=weekDates(), sheetDays={}, sheetWeek=null, sheetName='', useSheet=kpi&&kpi.v&&!kpi.v.error&&kpi.v.blocks&&!kpi.v.prev;
+  if(useSheet){ sheetName=kpi.v.sheet;
+    kpi.v.blocks.forEach(function(b){ if(/weekly|total/i.test(b.label)){ sheetWeek=kstats(b.fields); return; } var d=sheetDate(b.label,dates); if(d){ var st=kstats(b.fields); if(st.hours||st.retail) sheetDays[d]=st; } });
   }
-  var wd=weekDays(), t={retail:0,hours:0,stops:0,buyers:0,medals:0,ups:0,upsAmt:0};
-  wd.forEach(function(d){t.retail+=+d.retail||0;t.hours+=+d.hours||0;t.stops+=+d.stops||0;t.buyers+=+d.buyers||0});
-  t.rph=t.hours?t.retail/t.hours:0;
-  return {src:'manual',t:t,days:wd.map(function(d){return {label:fmtDate(d.date),date:d.date,s:{retail:+d.retail||0,hours:+d.hours||0,rph:d.hours?d.retail/d.hours:0,stops:+d.stops||0,buyers:+d.buyers||0}}})};
+  var days=[];
+  dates.forEach(function(d){
+    if(sheetDays[d]) days.push({date:d,s:sheetDays[d],src:'sheet'});
+    else { var md=S.days.find(function(x){return x.date==d}); if(md) days.push({date:d,id:md.id,src:'manual',s:{retail:+md.retail||0,hours:+md.hours||0,stops:+md.stops||0,buyers:+md.buyers||0,medals:+md.medals||0,ups:+md.ups||0,upsAmt:+md.upsAmt||0,rph:md.hours?md.retail/md.hours:0}}); }
+  });
+  var t={retail:0,hours:0,stops:0,buyers:0,medals:0,ups:0,upsAmt:0};
+  days.forEach(function(d){ for(var k in t) t[k]+=+d.s[k]||0; });
+  // sheet has a weekly total but no daily lines we could read: use it if nothing manual
+  if(sheetWeek&&!Object.keys(sheetDays).length&&!days.length) t=sheetWeek;
+  t.hours=Math.round(t.hours*100)/100; t.rph=t.hours?t.retail/t.hours:0;
+  return {t:t,days:days,sheet:sheetName,hasSheet:!!useSheet};
 }
-function todayLine(w){
-  var d=new Date(), dn=d.toLocaleDateString('en-AU',{weekday:'long'}).toLowerCase(), ds=d.getDate()+'/'+(d.getMonth()+1);
-  return w.days.find(function(x){ if(x.date) return x.date==iso(); var l=(x.label||'').toLowerCase(); return l.indexOf(dn)>=0||l.indexOf(dn.slice(0,3))===0||l.indexOf(ds)>=0; });
-}
+function todayLine(w){ return w.days.find(function(x){return x.date==iso()}); }
 function vToday(){
   var w=workWeek(), t=w.t, z=zone(t.rph), gap=Math.max(0,120*t.hours-t.retail);
   var conv=t.stops?Math.round(t.buyers/t.stops*100):0, avg=t.buyers?t.retail/t.buyers:0;
   var o=header(greet(),1);
   // THIS WEEK
-  o+='<div class="sec"><div class="sh"><h3>'+(w.prev?'Last week':'This week')+'</h3>'+(w.src=='sheet'?'<span class="ss">'+esc(w.sheet)+'</span>':'')+'</div><div class="box">'+
+  o+='<div class="sec"><div class="sh"><h3>This week</h3><span class="ss">'+(w.hasSheet?'KPI sheet + manual':'Manual log')+'</span></div><div class="box">'+
     '<div class="r fx">'+ringSvg(88,6,t.rph/120,'var(--accent)','<div><b style="font-size:20px">'+(t.hours?Math.round(t.rph):'–')+'</b><small>$ / HR</small></div>')+
     '<div><div class="lbl">Retail</div><div class="hero"><div class="num" style="font-size:44px;margin-top:4px"><span style="font-size:22px;top:4px">$</span>'+Math.round(t.retail).toLocaleString('en-AU')+'</div></div>'+
     '<div class="ss">'+(t.hours?t.hours+' hrs · '+z[0]+' zone'+(t.rph>=120?' · gold ✓':' · '+money(gap)+' to gold'):'No hours yet this week')+'</div></div></div>'+
     '<div class="three"><div><div class="lbl">Stops</div><div class="vv">'+t.stops+'</div></div><div><div class="lbl">Buyers</div><div class="vv">'+t.buyers+'</div><div class="ss">'+conv+'% conv</div></div><div><div class="lbl">Avg</div><div class="vv">'+money(avg)+'</div><div class="ss">per buyer</div></div></div>'+
-    (w.src=='sheet'?'<div class="three"><div><div class="lbl">Medals</div><div class="vv">'+t.medals+'</div></div><div><div class="lbl">Upsells</div><div class="vv">'+t.ups+'</div></div><div><div class="lbl">Upsell $</div><div class="vv">'+money(t.upsAmt)+'</div></div></div>':'')+
+    ((t.medals||t.ups)?'<div class="three"><div><div class="lbl">Medals</div><div class="vv">'+t.medals+'</div></div><div><div class="lbl">Upsells</div><div class="vv">'+t.ups+'</div></div><div><div class="lbl">Upsell $</div><div class="vv">'+money(t.upsAmt)+'</div></div></div>':'')+
     '</div></div>';
   // TODAY
   var td=todayLine(w);
-  if(!(td&&(td.s.hours||td.s.retail))){ var md=S.days.find(function(x){return x.date==iso()}); if(md) td={label:'Today',manual:1,s:{retail:+md.retail||0,hours:+md.hours||0,rph:md.hours?md.retail/md.hours:0,stops:+md.stops||0,buyers:+md.buyers||0,medals:+md.medals||0,ups:+md.ups||0,upsAmt:+md.upsAmt||0}}; }
+
   o+='<div class="sec"><div class="sh"><h3>Today</h3><button data-logday>+ Log manually</button></div><div class="box">'+
-    (td&&(td.s.hours||td.s.retail)?'<div class="r"><div style="display:flex;justify-content:space-between;align-items:baseline"><div class="vv" style="margin:0">'+money(td.s.retail)+'</div><span class="pill">'+zone(td.s.rph)[0]+' · '+money(td.s.rph)+'/hr</span></div><div class="ss">'+td.s.hours+' hrs · '+td.s.stops+' stops · '+td.s.buyers+' buyers'+(td.s.buyers?' · '+money(td.s.retail/td.s.buyers)+' avg':'')+(td.s.ups?' · '+td.s.ups+' upsells':'')+(td.s.medals?' · '+td.s.medals+' medal'+(td.s.medals>1?'s':''):'')+(td.manual?' · logged manually':'')+'</div></div>'
+    (td&&(td.s.hours||td.s.retail)?'<div class="r"><div style="display:flex;justify-content:space-between;align-items:baseline"><div class="vv" style="margin:0">'+money(td.s.retail)+'</div><span class="pill">'+zone(td.s.rph)[0]+' · '+money(td.s.rph)+'/hr</span></div><div class="ss">'+td.s.hours+' hrs · '+td.s.stops+' stops · '+td.s.buyers+' buyers'+(td.s.buyers?' · '+money(td.s.retail/td.s.buyers)+' avg':'')+(td.s.ups?' · '+td.s.ups+' upsells':'')+(td.s.medals?' · '+td.s.medals+' medal'+(td.s.medals>1?'s':''):'')+(td.src=='manual'?' · logged manually':'')+'</div></div>'
       :'<div class="r"><div class="ss">No results for today yet. They\'ll appear once the KPI sheet is updated.</div></div>')+
     '</div></div>';
+  // DAYS
+  if(w.days.length) o+='<div class="sec"><div class="sh"><h3>This week\'s days</h3></div><div class="box">'+w.days.map(function(d){var z=zone(d.s.rph);
+    return '<div class="r'+(d.src=='manual'?' tap':'')+'" '+(d.src=='manual'?'data-editday="'+d.id+'"':'')+' style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div><div style="font-size:15px;font-weight:600">'+parse(d.date).toLocaleDateString('en-AU',{weekday:'long'})+' · '+money(d.s.retail)+'</div><div class="ss">'+d.s.hours+' hrs · '+d.s.stops+' stops · '+d.s.buyers+' buyers'+(d.src=='manual'?' · manual':'')+'</div></div><span class="pill">'+z[0]+' · '+money(d.s.rph)+'/hr</span></div>'}).join('')+'</div>'+(w.days.some(function(d){return d.src=='manual'})?'<div class="ss" style="padding:8px 6px 0">Tap a manual day to edit or delete it.</div>':'')+'</div>';
   // GOALS
   o+='<div class="sec"><div class="sh"><h3>Goals</h3><button data-go="goals">All ›</button></div><div class="box">'+
     (S.goals.length?S.goals.slice(0,4).map(function(g){var p=g.target?g.cur/g.target:0;return '<div class="r fx tap" data-edit-goal="'+g.id+'">'+ringSvg(44,4,p,'var(--accent)','<div style="font-size:10px;font-weight:700">'+Math.round(p*100)+'%</div>')+'<div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600">'+esc(g.title)+'</div><div class="ss">'+(g.unit||'')+(+g.cur).toLocaleString('en-AU')+' of '+(g.unit||'')+(+g.target).toLocaleString('en-AU')+'</div></div></div>'}).join('')
@@ -523,9 +534,13 @@ function vToday(){
   o+='<div class="sec"><div class="sh"><h3>To-dos</h3><button data-go="worktasks">All ›</button></div><div class="box"><div style="padding:2px 18px">'+(open.length?open.map(taskRow).join(''):'<div class="empty" style="padding:14px 0">All clear.</div>')+'</div></div></div>';
   return o;
 }
-function dayLogSheet(){
-  sheet('Log a field day','Only needed if the KPI sheet misses a day.',[{name:'date',label:'Date',type:'date',value:iso()},{name:'hours',label:'Hours',type:'number',step:'0.25',value:6},{name:'retail',label:'Retail $',type:'number',step:'1'},{name:'stops',label:'Stops',type:'number',req:false},{name:'buyers',label:'Buyers',type:'number',req:false}],
-    function(d){ var ex=S.days.find(function(x){return x.date==d.date}); var rec={date:d.date,hours:+d.hours,retail:+d.retail,stops:+d.stops||0,buyers:+d.buyers||0}; if(ex)Object.assign(ex,rec); else S.days.push(Object.assign({id:uid()},rec)); });
+function dayLogSheet(ex){
+  sheet(ex?'Edit day':'Log a field day',ex?'':'Use this when the KPI sheet doesn\'t have your day yet.',[{name:'date',label:'Date',type:'date',value:ex?ex.date:iso()},{name:'hours',label:'Hours',type:'number',step:'0.25',value:ex?ex.hours:6},{name:'retail',label:'Retail $',type:'number',step:'1',value:ex&&ex.retail},{name:'stops',label:'Stops',type:'number',value:ex&&ex.stops,req:false},{name:'buyers',label:'Buyers',type:'number',value:ex&&ex.buyers,req:false},{name:'medals',label:'Medals',type:'number',value:ex&&ex.medals,req:false},{name:'ups',label:'Upsells',type:'number',value:ex&&ex.ups,req:false},{name:'upsAmt',label:'Upsell $',type:'number',step:'1',value:ex&&ex.upsAmt,req:false}],
+    function(d){ var rec={date:d.date,hours:+d.hours,retail:+d.retail,stops:+d.stops||0,buyers:+d.buyers||0,medals:+d.medals||0,ups:+d.ups||0,upsAmt:+d.upsAmt||0};
+      var cur=ex||S.days.find(function(x){return x.date==d.date});
+      if(ex){ S.days=S.days.filter(function(x){return x.id==ex.id||x.date!=d.date}); }
+      if(cur&&S.days.indexOf(cur)>=0) Object.assign(cur,rec); else S.days.push(Object.assign({id:uid()},rec)); flash='Day saved.'; },
+    ex?function(){ S.days=S.days.filter(function(x){return x.id!=ex.id}); }:null);
 }
 function dueText(d){var n=daysUntil(d); if(n<0) return 'Overdue by '+(-n)+' day'+(n==-1?'':'s'); if(n==0) return 'Due today'; if(n==1) return 'Due tomorrow'; return 'Due '+fmtDate(d)+' · in '+n+' days';}
 /* ---------- Life Home ---------- */
@@ -804,7 +819,7 @@ function render(){
 }
 function go(t){tab=t;flash='';catOpen=null;try{localStorage.setItem('fd_tab',t)}catch(e){} try{history.replaceState(null,'','#'+t)}catch(e){} window.scrollTo(0,0); render();}
 document.addEventListener('click',function(e){
-  var el=e.target.closest('[data-tab],[data-go],[data-mode],[data-task],[data-del-task],[data-pay],[data-edit-bill],[data-add],[data-week],[data-edit-goal],[data-area],[data-del-day],[data-clear-done],[data-edit-target],[data-range],[data-cat],[data-tx],[data-acc],[data-settings],[data-focus],[data-savings],[data-logday],[data-capture],[data-del-inbox]');
+  var el=e.target.closest('[data-tab],[data-go],[data-mode],[data-task],[data-del-task],[data-pay],[data-edit-bill],[data-add],[data-week],[data-edit-goal],[data-area],[data-del-day],[data-clear-done],[data-edit-target],[data-range],[data-cat],[data-tx],[data-acc],[data-settings],[data-focus],[data-savings],[data-logday],[data-capture],[data-del-inbox],[data-editday]');
   if(!el) return; var ds=el.dataset;
   if('settings' in ds) return settingsSheet();
   if(ds.tab) return go(ds.tab);
@@ -813,6 +828,7 @@ document.addEventListener('click',function(e){
   if('focus' in ds) return focusSheet();
   if('logday' in ds) return dayLogSheet();
   if('capture' in ds) return captureSheet();
+  if(ds.editday) return dayLogSheet(S.days.find(function(x){return x.id==ds.editday}));
   if(ds.delInbox){ S.inbox=S.inbox.filter(function(x){return x.id!=ds.delInbox}); save(); return render(); }
   if('savings' in ds) return savingsSheet();
   if(ds.task){var t=S.tasks.find(function(x){return x.id==ds.task}); t.done=!t.done; save(); return render();}
