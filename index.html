@@ -543,7 +543,7 @@ function vToday(){
   o+='<div class="sec"><div class="sh"><h3>To-dos</h3><button data-go="worktasks">All ›</button></div><div class="box"><div style="padding:2px 18px">'+(open.length?open.map(taskRow).join(''):'<div class="empty" style="padding:14px 0">All clear.</div>')+'</div></div></div>';
   return o;
 }
-var TIERS=[{rph:100,name:'Silver',pct:2},{rph:120,name:'Gold',pct:4},{rph:150,name:'Platinum',pct:4,zone:1},{rph:160,name:'Platinum bonus',pct:7},{rph:200,name:'Diamond',pct:11}], BONUS_MIN=2000;
+var TIERS=[{rph:100,name:'Silver',pct:2},{rph:120,name:'Gold',pct:4},{rph:150,name:'Platinum',pct:7},{rph:200,name:'Diamond',pct:11}], BONUS_MIN=2000;
 function bonusPct(retail,hours){ if(retail<BONUS_MIN||!hours) return 0; var r=retail/hours, p=0; TIERS.forEach(function(t){ if(r>=t.rph) p=Math.max(p,t.pct); }); return p; }
 function recentAvgs(){
   var cut=new Date(); cut.setDate(cut.getDate()-28); var c=iso(cut);
