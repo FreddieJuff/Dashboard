@@ -513,10 +513,10 @@ function vToday(){
     '<div class="r fx">'+ringSvg(88,6,t.rph/120,'var(--accent)','<div><b style="font-size:20px">'+(t.hours?Math.round(t.rph):'–')+'</b><small>$ / HR</small></div>')+
     '<div><div class="lbl">Retail</div><div class="hero"><div class="num" style="font-size:44px;margin-top:4px"><span style="font-size:22px;top:4px">$</span>'+Math.round(t.retail).toLocaleString('en-AU')+'</div></div>'+
     '<div class="ss">'+(t.hours?t.hours+' hrs · '+z[0]+' zone'+(t.rph>=120?' ✓':' · '+money(gap)+' to gold'):'No hours yet this week')+'</div></div></div>'+
-    goldTarget(w)+
     '<div class="three"><div><div class="lbl">Stops</div><div class="vv">'+t.stops+'</div></div><div><div class="lbl">Buyers</div><div class="vv">'+t.buyers+'</div><div class="ss">'+conv+'% conv</div></div><div><div class="lbl">Avg</div><div class="vv">'+money(avg)+'</div><div class="ss">per buyer</div></div></div>'+
     ((t.medals||t.ups)?'<div class="three"><div><div class="lbl">Medals</div><div class="vv">'+t.medals+'</div></div><div><div class="lbl">Upsells</div><div class="vv">'+t.ups+'</div></div><div><div class="lbl">Upsell $</div><div class="vv">'+money(t.upsAmt)+'</div></div></div>':'')+
     '</div></div>';
+  o+=plannerSec(w);
   // TODAY
   var td=todayLine(w);
 
@@ -542,6 +542,42 @@ function vToday(){
   var open=S.tasks.filter(function(t){return !t.done&&WORK_AREAS.indexOf(t.area)>=0}).slice(0,3);
   o+='<div class="sec"><div class="sh"><h3>To-dos</h3><button data-go="worktasks">All ›</button></div><div class="box"><div style="padding:2px 18px">'+(open.length?open.map(taskRow).join(''):'<div class="empty" style="padding:14px 0">All clear.</div>')+'</div></div></div>';
   return o;
+}
+var TIERS=[{rph:100,name:'Silver',pct:2},{rph:120,name:'Gold',pct:4},{rph:150,name:'Platinum',pct:4},{rph:160,name:'7% tier',pct:7},{rph:200,name:'Diamond',pct:11}], BONUS_MIN=2000;
+function bonusPct(retail,hours){ if(retail<BONUS_MIN||!hours) return 0; var r=retail/hours, p=0; TIERS.forEach(function(t){ if(r>=t.rph) p=Math.max(p,t.pct); }); return p; }
+function recentAvgs(){
+  var cut=new Date(); cut.setDate(cut.getDate()-28); var c=iso(cut);
+  var es=allEntries(), rec=es.filter(function(e){return e.date>=c}); var src=rec.length>=3?rec:es;
+  var t=sumE(src); return {avg:t.avg||50, conv:(t.conv||55)/100, n:src.length, recent:src===rec};
+}
+function hoursLeft(w){ var p=plan(), wk=weekStart(new Date());
+  if(S.hoursLeft&&S.hoursLeft.week==wk) return +S.hoursLeft.hrs;
+  var done=w.days.filter(function(d){return d.s.hours>0}).length; return Math.max(0,p.days-done)*p.hours; }
+function plannerSec(w){
+  var t=w.t, hl=hoursLeft(w), tot=t.hours+hl, a=recentAvgs(), cur=bonusPct(t.retail,t.hours), fee=t.retail*cur/100;
+  var rows=TIERS.map(function(tr){
+    var req=Math.max(tr.rph*tot, tr.pct?BONUS_MIN:0), need=Math.max(0,Math.ceil(req-t.retail)), done=need<=0;
+    var buyers=Math.ceil(need/a.avg), stops=Math.ceil(buyers/a.conv), feeAt=Math.max(req,t.retail)*tr.pct/100;
+    return {tr:tr,need:need,done:done,perHr:hl?need/hl:Infinity,buyers:buyers,stops:stops,fee:feeAt};
+  });
+  var next=rows.find(function(r){return !r.done&&r.tr.pct>cur});
+  var o='<div class="sec"><div class="sh"><h3>Week planner</h3><span class="ss">bonus · zones</span></div><div class="box">';
+  // bonus card
+  o+='<div class="two" style="border-top:0"><div><div class="lbl">Bonus so far</div><div class="vv">'+money(fee)+'</div><div class="ss">'+(cur?cur+'% of '+money(t.retail):t.retail<BONUS_MIN?money(BONUS_MIN-t.retail)+' to the $2,000 minimum':'below $100/hr')+'</div></div>'+
+    '<div><div class="lbl">Week RPH</div><div class="vv">'+(t.hours?money(t.rph,1):'–')+'</div><div class="ss">'+t.hours+' hrs · '+money(t.retail)+'</div></div></div>';
+  // hours left
+  o+='<div class="r" style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div><div class="lbl">Hours left this week</div><div class="ss">'+tot+' hrs total</div></div><div style="display:flex;align-items:center;gap:8px"><button class="pill" style="border:1px solid var(--line);cursor:pointer;font-size:16px;padding:6px 14px" data-hl="-0.5">−</button><div style="font-size:22px;font-weight:700;min-width:44px;text-align:center">'+hl+'</div><button class="pill" style="border:1px solid var(--line);cursor:pointer;font-size:16px;padding:6px 14px" data-hl="0.5">+</button></div></div>';
+  // best move
+  if(next){ var gain=next.fee-fee;
+    o+='<div class="r" style="background:var(--accent-soft)"><div class="lbl">Best next move</div><div style="font-size:16px;font-weight:600;margin-top:4px">'+money(next.need)+' more retail → '+next.tr.pct+'% tier'+(gain>0?' (+'+money(gain)+' bonus)':'')+'</div><div class="ss">'+(hl?money(next.perHr)+'/hr over '+hl+' hrs · ~'+next.buyers+' buyers · ~'+next.stops+' stops':'No hours left: this would need extra hours')+'</div></div>';
+  }
+  // ladder
+  o+='<div class="r" style="display:grid;grid-template-columns:1.35fr 1fr .9fr .75fr .9fr;gap:6px;font-size:10px;letter-spacing:.08em;color:var(--muted);font-weight:600;text-transform:uppercase"><div>Target</div><div>Need</div><div>Per hr</div><div>Stops</div><div style="text-align:right">Bonus</div></div>'+
+    rows.map(function(r){ return '<div class="r" style="display:grid;grid-template-columns:1.35fr 1fr .9fr .75fr .9fr;gap:6px;font-size:14px;align-items:center;padding-top:12px;padding-bottom:12px'+(r.done?';opacity:.6':'')+'"><div><div style="font-weight:600">'+r.tr.name+'</div><div class="ss" style="margin:0">$'+r.tr.rph+'/hr'+(r.tr.pct?' · '+r.tr.pct+'%':'')+'</div></div>'+
+      (r.done?'<div style="grid-column:span 3;font-weight:600">✓ Reached</div>':'<div style="font-weight:700">'+money(r.need)+'</div><div>'+(hl?money(r.perHr):'–')+'</div><div>~'+r.stops+'<div class="ss" style="margin:0">'+r.buyers+' buyers</div></div>')+
+      '<div style="text-align:right;font-weight:600">'+money(r.fee)+'</div></div>'; }).join('')+
+    '<div class="r"><div class="ss">Stops and buyers use your '+(a.recent?'last 4 weeks':'all-time')+': '+money(a.avg)+' average sale, '+Math.round(a.conv*100)+'% conversion. Bonus = % of the whole week\'s retail, from $2,000 minimum. Estimate only; your leader confirms.</div></div>';
+  return o+'</div></div>';
 }
 function plan(){ return {days:+(S.workDays||5), hours:+(S.workHours||5.5)}; }
 function goldTarget(w){
@@ -899,7 +935,7 @@ function render(){
 }
 function go(t){tab=t;flash='';catOpen=null;try{localStorage.setItem('fd_tab',t)}catch(e){} try{history.replaceState(null,'','#'+t)}catch(e){} window.scrollTo(0,0); render();}
 document.addEventListener('click',function(e){
-  var el=e.target.closest('[data-tab],[data-go],[data-mode],[data-task],[data-del-task],[data-pay],[data-edit-bill],[data-add],[data-week],[data-edit-goal],[data-area],[data-del-day],[data-clear-done],[data-edit-target],[data-range],[data-cat],[data-tx],[data-acc],[data-settings],[data-focus],[data-savings],[data-logday],[data-capture],[data-del-inbox],[data-editday],[data-recruit],[data-advance]');
+  var el=e.target.closest('[data-tab],[data-go],[data-mode],[data-task],[data-del-task],[data-pay],[data-edit-bill],[data-add],[data-week],[data-edit-goal],[data-area],[data-del-day],[data-clear-done],[data-edit-target],[data-range],[data-cat],[data-tx],[data-acc],[data-settings],[data-focus],[data-savings],[data-logday],[data-capture],[data-del-inbox],[data-editday],[data-recruit],[data-advance],[data-hl]');
   if(!el) return; var ds=el.dataset;
   if('settings' in ds) return settingsSheet();
   if(ds.tab) return go(ds.tab);
@@ -908,6 +944,7 @@ document.addEventListener('click',function(e){
   if('focus' in ds) return focusSheet();
   if('logday' in ds) return dayLogSheet();
   if('capture' in ds) return captureSheet();
+  if(ds.hl){ var ww=workWeek(), cur=hoursLeft(ww); S.hoursLeft={week:weekStart(new Date()),hrs:Math.max(0,Math.round((cur+(+ds.hl))*2)/2)}; save(); return render(); }
   if(ds.recruit) return recruitSheet((S.recruits||[]).find(function(x){return x.id==ds.recruit}));
   if(ds.advance){ var rr=(S.recruits||[]).find(function(x){return x.id==ds.advance}); var ni=STAGES.indexOf(rr.stage)+1; if(ni<8){ setStage(rr,STAGES[ni]); save(); render(); } return; }
   if(ds.editday) return dayLogSheet(S.days.find(function(x){return x.id==ds.editday}));
