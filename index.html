@@ -555,6 +555,10 @@ function hoursLeft(w){ var p=plan(), wk=weekStart(new Date());
   var done=w.days.filter(function(d){return d.s.hours>0}).length; return Math.max(0,p.days-done)*p.hours; }
 function plannerSec(w){
   var t=w.t, hl=hoursLeft(w), tot=t.hours+hl, a=recentAvgs(), cur=bonusPct(t.retail,t.hours), fee=t.retail*cur/100;
+  var DN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], logged=w.days.filter(function(d){return d.s.hours>0}), todayIn=logged.some(function(d){return d.date==iso()});
+  var span=logged.length?(DN[parse(logged[0].date).getDay()]+(logged.length>1?'–'+DN[parse(logged[logged.length-1].date).getDay()]:'')):'No days yet';
+  var incl='<div class="ss" style="margin-top:2px;font-weight:600;color:'+(todayIn?'var(--ok)':'var(--accent)')+'">'+span+' · '+(todayIn?'includes today':'today not included yet')+'</div>';
+  var when=todayIn?'after today':'today + rest of week';
   var rows=TIERS.map(function(tr){
     var req=Math.max(tr.rph*tot, tr.pct?BONUS_MIN:0), need=Math.max(0,Math.ceil(req-t.retail)), done=need<=0;
     var buyers=Math.ceil(need/a.avg), stops=Math.ceil(buyers/a.conv), feeAt=Math.max(req,t.retail)*tr.pct/100;
@@ -563,20 +567,20 @@ function plannerSec(w){
   var next=rows.find(function(r){return !r.done&&r.tr.pct>cur});
   var o='<div class="sec"><div class="sh"><h3>Week planner</h3><span class="ss">bonus · zones</span></div><div class="box">';
   // bonus card
-  o+='<div class="two" style="border-top:0"><div><div class="lbl">Bonus so far</div><div class="vv">'+money(fee)+'</div><div class="ss">'+(cur?cur+'% of '+money(t.retail):t.retail<BONUS_MIN?money(BONUS_MIN-t.retail)+' to the $2,000 minimum':'below $100/hr')+'</div></div>'+
-    '<div><div class="lbl">Week RPH</div><div class="vv">'+(t.hours?money(t.rph,1):'–')+'</div><div class="ss">'+t.hours+' hrs · '+money(t.retail)+'</div></div></div>';
+  o+='<div class="two" style="border-top:0"><div><div class="lbl">Bonus so far</div><div class="vv">'+money(fee)+'</div><div class="ss">'+(cur?cur+'% of '+money(t.retail):t.retail<BONUS_MIN?money(BONUS_MIN-t.retail)+' to the $2,000 minimum':'below $100/hr')+'</div>'+incl+'</div>'+
+    '<div><div class="lbl">Week RPH</div><div class="vv">'+(t.hours?money(t.rph,1):'–')+'</div><div class="ss">'+t.hours+' hrs · '+money(t.retail)+'</div>'+incl+'</div></div>';
   // hours left
-  o+='<div class="r" style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div><div class="lbl">Hours left this week</div><div class="ss">'+tot+' hrs total</div></div><div style="display:flex;align-items:center;gap:8px"><button class="pill" style="border:1px solid var(--line);cursor:pointer;font-size:16px;padding:6px 14px" data-hl="-0.5">−</button><div style="font-size:22px;font-weight:700;min-width:44px;text-align:center">'+hl+'</div><button class="pill" style="border:1px solid var(--line);cursor:pointer;font-size:16px;padding:6px 14px" data-hl="0.5">+</button></div></div>';
+  o+='<div class="r" style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div><div class="lbl">Hours left · '+(todayIn?'after today':'incl. today\'s shift')+'</div><div class="ss">'+tot+' hrs total for the week</div></div><div style="display:flex;align-items:center;gap:8px"><button class="pill" style="border:1px solid var(--line);cursor:pointer;font-size:16px;padding:6px 14px" data-hl="-0.5">−</button><div style="font-size:22px;font-weight:700;min-width:44px;text-align:center">'+hl+'</div><button class="pill" style="border:1px solid var(--line);cursor:pointer;font-size:16px;padding:6px 14px" data-hl="0.5">+</button></div></div>';
   // best move
   if(next){ var gain=next.fee-fee;
-    o+='<div class="r" style="background:var(--accent-soft)"><div class="lbl">Best next move</div><div style="font-size:16px;font-weight:600;margin-top:4px">'+money(next.need)+' more retail → '+(next.tr.pct==4?'Gold':next.tr.name)+' ('+next.tr.pct+'%)'+(gain>0?' (+'+money(gain)+' bonus)':'')+'</div><div class="ss">'+(hl?money(next.perHr)+'/hr over '+hl+' hrs · ~'+next.buyers+' buyers · ~'+next.stops+' stops':'No hours left: this would need extra hours')+'</div></div>';
+    o+='<div class="r" style="background:var(--accent-soft)"><div class="lbl">Best next move</div><div style="font-size:16px;font-weight:600;margin-top:4px">'+money(next.need)+' more retail → '+(next.tr.pct==4?'Gold':next.tr.name)+' ('+next.tr.pct+'%)'+(gain>0?' (+'+money(gain)+' bonus)':'')+'</div><div class="ss">'+(hl?money(next.perHr)+'/hr over '+hl+' hrs ('+when+') · ~'+next.buyers+' buyers · ~'+next.stops+' stops':'No hours left: this would need extra hours')+'</div></div>';
   }
   // ladder
   o+='<div class="r" style="display:grid;grid-template-columns:1.25fr .95fr .8fr .95fr .85fr;gap:6px;font-size:10px;letter-spacing:.08em;color:var(--muted);font-weight:600;text-transform:uppercase"><div>Target</div><div>Need</div><div>Per hr</div><div>Stops</div><div style="text-align:right">Bonus</div></div>'+
     rows.map(function(r){ return '<div class="r" style="display:grid;grid-template-columns:1.25fr .95fr .8fr .95fr .85fr;gap:6px;font-size:14px;align-items:center;padding-top:12px;padding-bottom:12px'+(r.done?';opacity:.6':'')+'"><div><div style="font-weight:600">'+r.tr.name+'</div><div class="ss" style="margin:0">$'+r.tr.rph+'/hr'+(r.tr.zone?' · zone':r.tr.pct?' · '+r.tr.pct+'%':'')+'</div></div>'+
       (r.done?'<div style="grid-column:span 3;font-weight:600">✓ Reached</div>':'<div style="font-weight:700">'+money(r.need)+'</div><div>'+(hl?money(r.perHr):'–')+'</div><div><b>~'+r.stops+'</b><div class="ss" style="margin:0;white-space:nowrap;font-size:11px">'+r.buyers+' buyers</div></div>')+
       '<div style="text-align:right;font-weight:600">'+money(r.fee)+'</div></div>'; }).join('')+
-    '<div class="r"><div class="ss">Need = extra retail over your remaining hours to finish the week at that rate. Stops and buyers use your '+(a.recent?'last 4 weeks':'all-time')+': '+money(a.avg)+' average sale, '+Math.round(a.conv*100)+'% conversion. Bonus = % of the whole week\'s retail, from $2,000 minimum. Estimate only; your leader confirms.</div></div>';
+    '<div class="r"><div class="ss">Need = extra retail over your remaining hours ('+when+') to finish the week at that rate. Stops and buyers use your '+(a.recent?'last 4 weeks':'all-time')+': '+money(a.avg)+' average sale, '+Math.round(a.conv*100)+'% conversion. Bonus = % of the whole week\'s retail, from $2,000 minimum. Estimate only; your leader confirms.</div></div>';
   return o+'</div></div>';
 }
 function plan(){ return {days:+(S.workDays||5), hours:+(S.workHours||5.5)}; }
