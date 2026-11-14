@@ -279,7 +279,8 @@ function applyTheme(){
 try{ matchMedia('(prefers-color-scheme: dark)').addEventListener('change',function(){applyTheme()}); }catch(e){}
 function syncOk(){ syncState='Synced to Drive'; if(document.querySelector('.warn')) render(); else setSync(syncState); }
 function needsConnect(){ return !SYNC.key || /Wrong PIN|Locked|No PIN/i.test(syncState); }
-var syncState='', pulling=false, connecting=false;
+var syncState='', pulling=false, connecting=false, BASE=0; try{ BASE=+localStorage.getItem('fd_base')||0; }catch(e){}
+function setBase(v){ BASE=+v||0; try{ localStorage.setItem('fd_base',String(BASE)); }catch(e){} }
 function isEmpty(x){ return !x || ['bills','accounts','income','tasks','goals','days','tx'].every(function(k){ return !x[k]||!x[k].length; }); }
 function persistLocal(){ try{ localStorage.setItem('fd_state', JSON.stringify(S)); }catch(e){} }
 function save(){
@@ -291,9 +292,20 @@ function save(){
 function push(){
   if(pulling){ clearTimeout(timer); timer=setTimeout(push,800); return; }
   if(isEmpty(S)) { setSync('Synced to Drive'); return; }
-  return fetch(SYNC.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:SYNC.key,data:S})})
-   .then(function(r){return r.json()}).then(function(j){ if(j&&j.ok){syncOk();} else {syncState=errText(j&&j.error); render();} })
-   .catch(function(){ syncState='Offline · saved on phone'; setSync(syncState); });
+  // Check Drive first so we never overwrite newer changes (Claude's updates, steps, another device)
+  pulling=true; setSync('Saving…');
+  return fetch(SYNC.url+(SYNC.url.indexOf('?')<0?'?':'&')+'key='+encodeURIComponent(SYNC.key)+'&t='+Date.now()).then(function(r){return r.json()}).then(function(j){
+    pulling=false;
+    if(!j||j.error){ syncState=errText(j&&j.error); render(); return; }
+    var remote=j.data||{};
+    if(!isEmpty(remote)&&(remote.savedAt||0)>BASE){
+      S=normalise(remote); setBase(remote.savedAt); persistLocal();
+      flash=j.applied?'Claude updated your dashboard. If you just changed something, please redo it.':'Newer changes came in from Drive. If you just changed something, please redo it.';
+      render(); syncOk(); return;
+    }
+    return fetch(SYNC.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:SYNC.key,data:S})})
+      .then(function(r){return r.json()}).then(function(k){ if(k&&k.ok){ setBase(S.savedAt); syncOk(); } else { syncState=errText(k&&k.error); render(); } });
+  }).catch(function(){ pulling=false; syncState='Offline · saved on phone'; setSync(syncState); });
 }
 function pull(){
   if(!SYNC.url||!SYNC.key) return Promise.resolve();
@@ -302,14 +314,14 @@ function pull(){
    .then(function(r){return r.json()})
    .then(function(j){
      pulling=false;
-     if(j&&j.kpi&&Array.isArray(j.kpi.entries)){ var ks=JSON.stringify(j.kpi.entries); if(ks!==JSON.stringify(S.kpiEntries||[])){ S.kpiEntries=j.kpi.entries; setTimeout(save,2500); } }
      if(j&&j.kpi!==undefined){ kpi={t:Date.now(),v:j.kpi}; try{localStorage.setItem('fd_kpi',JSON.stringify(kpi))}catch(e){} if(tab=='today') setTimeout(render,0); }
      if(j&&Array.isArray(j.events)){ setEvents(j.events); if(tab=='lifehome') setTimeout(render,0); }
      if(!j||j.error){ syncState=errText(j&&j.error); render(); return; }
      var remote=j.data||{};
-     if(!isEmpty(remote) && (isEmpty(S) || (remote.savedAt||0)>(S.savedAt||0))){ S=normalise(remote); persistLocal(); if(j.applied) flash='Claude updated your dashboard ('+j.applied+' change'+(j.applied==1?'':'s')+').'; render(); syncOk(); }
-     else if((S.savedAt||0)>(remote.savedAt||0)){ push(); }
-     else { syncOk(); }
+     if(!isEmpty(remote) && (isEmpty(S) || (remote.savedAt||0)>(S.savedAt||0) || (remote.savedAt||0)>BASE)){ S=normalise(remote); setBase(remote.savedAt); persistLocal(); if(j.applied) flash='Claude updated your dashboard ('+j.applied+' change'+(j.applied==1?'':'s')+').'; render(); syncOk(); }
+     else if((S.savedAt||0)>(remote.savedAt||0)){ setBase(remote.savedAt); push(); }
+     else { setBase(remote.savedAt); syncOk(); }
+     if(j.kpi&&Array.isArray(j.kpi.entries)){ var ks=JSON.stringify(j.kpi.entries); if(ks!==JSON.stringify(S.kpiEntries||[])){ S.kpiEntries=j.kpi.entries; setTimeout(save,2500); } }
    }).catch(function(){ pulling=false; syncState='Offline · saved on phone'; setSync(syncState); });
 }
 function normalise(x){
