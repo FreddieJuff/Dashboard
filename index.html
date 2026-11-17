@@ -529,6 +529,7 @@ function vToday(){
     ((t.medals||t.ups)?'<div class="three"><div><div class="lbl">Medals</div><div class="vv">'+t.medals+'</div></div><div><div class="lbl">Upsells</div><div class="vv">'+t.ups+'</div></div><div><div class="lbl">Upsell $</div><div class="vv">'+money(t.upsAmt)+'</div></div></div>':'')+
     '</div></div>';
   o+=plannerSec(w);
+  o+=cashSec();
   // TODAY
   var td=todayLine(w);
 
@@ -554,6 +555,31 @@ function vToday(){
   var open=S.tasks.filter(function(t){return !t.done&&WORK_AREAS.indexOf(t.area)>=0}).slice(0,3);
   o+='<div class="sec"><div class="sh"><h3>To-dos</h3><button data-go="worktasks">All ›</button></div><div class="box"><div style="padding:2px 18px">'+(open.length?open.map(taskRow).join(''):'<div class="empty" style="padding:14px 0">All clear.</div>')+'</div></div></div>';
   return o;
+}
+/* ---------- Cash to deposit ---------- */
+var CASH_START='2026-11-15'; // deposited 17 Nov, covering everything up to Sun 15 Nov
+function lastDeposit(){ var d=(S.cashDeposits||[]).slice().sort(function(a,b){return a.through<b.through?-1:1}); return d[d.length-1]||null; }
+function cashOwed(){
+  var ld=lastDeposit(), since=ld?ld.through:CASH_START;
+  var days=allEntries().filter(function(e){return e.date>since&&(e.retail||e.cash)});
+  var total=0, missing=[];
+  days.forEach(function(e){ total+=+e.cash||0; if(+e.retail>0&&!(+e.cash)&&!(+e.eftpos)) missing.push(e.date); });
+  return {total:total,days:days,since:since,last:ld,missing:missing,through:days.length?days[days.length-1].date:null};
+}
+function dayDate(d){ var x=parse(d); return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][x.getDay()]+' '+x.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][x.getMonth()]; }
+function cashSec(){
+  var c=cashOwed(), withCash=c.days.filter(function(e){return +e.cash>0});
+  var o='<div class="sec"><div class="sh"><h3>Cash to deposit</h3>'+(c.days.length?'<button data-deposit>Deposited</button>':'')+'</div><div class="box">';
+  o+='<div class="r" style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px"><div><div class="lbl">Holding</div><div class="vv" style="font-size:30px">'+money(c.total)+'</div><div class="ss">'+(c.days.length?dayDate(c.days[0].date)+(c.days.length>1?' – '+dayDate(c.through):'')+' · '+c.days.length+' day'+(c.days.length>1?'s':''):'All deposited up to '+dayDate(c.since))+'</div></div>'+
+    (c.last?'<div class="ss" style="text-align:right">Last deposit<br><b style="color:var(--ink)">'+money(c.last.amount)+'</b> · '+dayDate(c.last.date)+'</div>':'')+'</div>';
+  if(withCash.length) o+='<div class="r"><div class="ss">'+withCash.map(function(e){return dayDate(e.date).split(' ')[0]+' '+money(e.cash)}).join(' · ')+'</div></div>';
+  if(c.missing.length) o+='<div class="r" style="background:var(--accent-soft)"><div class="ss" style="color:var(--ink)">⚠️ No cash/EFTPOS split entered for '+c.missing.map(function(d){return dayDate(d)}).join(', ')+'. Add it in the KPI app so this total is right.</div></div>';
+  return o+'</div></div>';
+}
+function depositSheet(){
+  var c=cashOwed();
+  sheet('Cash deposited','Covers cash up to and including '+dayDate(c.through)+'.',[{name:'amount',label:'Amount deposited $',type:'number',step:'0.01',im:'decimal',value:c.total},{name:'date',label:'Date deposited',type:'date',value:iso()}],
+    function(d){ S.cashDeposits=S.cashDeposits||[]; S.cashDeposits.push({id:uid(),date:d.date,through:c.through,amount:+d.amount,expected:c.total}); });
 }
 var TIERS=[{rph:100,name:'Silver',pct:2},{rph:120,name:'Gold',pct:4},{rph:150,name:'Platinum',pct:7},{rph:200,name:'Diamond',pct:11}], BONUS_MIN=2000;
 function bonusPct(retail,hours){ if(retail<BONUS_MIN||!hours) return 0; var r=retail/hours, p=0; TIERS.forEach(function(t){ if(r>=t.rph) p=Math.max(p,t.pct); }); return p; }
@@ -607,7 +633,7 @@ function goldTarget(w){
 /* ---------- Trends ---------- */
 function allEntries(){
   var map={};
-  (S.days||[]).forEach(function(d){ map[d.date]={date:d.date,retail:+d.retail||0,hours:+d.hours||0,stops:+d.stops||0,buyers:+d.buyers||0,medals:+d.medals||0,ups:+d.ups||0,upsAmt:+d.upsAmt||0}; });
+  (S.days||[]).forEach(function(d){ map[d.date]={date:d.date,retail:+d.retail||0,hours:+d.hours||0,stops:+d.stops||0,buyers:+d.buyers||0,medals:+d.medals||0,ups:+d.ups||0,upsAmt:+d.upsAmt||0,cash:+d.cash||0,eftpos:+d.eftpos||0}; });
   var ke=(kpi&&kpi.v&&kpi.v.entries)||S.kpiEntries||[];
   ke.forEach(function(e){ if(e.hours||e.retail) map[e.date]=e; });
   return Object.keys(map).sort().map(function(k){return map[k]});
@@ -951,7 +977,7 @@ function render(){
 }
 function go(t){tab=t;flash='';catOpen=null;try{localStorage.setItem('fd_tab',t)}catch(e){} try{history.replaceState(null,'','#'+t)}catch(e){} window.scrollTo(0,0); render();}
 document.addEventListener('click',function(e){
-  var el=e.target.closest('[data-tab],[data-go],[data-mode],[data-task],[data-del-task],[data-pay],[data-edit-bill],[data-add],[data-week],[data-edit-goal],[data-area],[data-del-day],[data-clear-done],[data-edit-target],[data-range],[data-cat],[data-tx],[data-acc],[data-settings],[data-focus],[data-savings],[data-logday],[data-capture],[data-del-inbox],[data-editday],[data-recruit],[data-advance],[data-hl]');
+  var el=e.target.closest('[data-tab],[data-go],[data-mode],[data-task],[data-del-task],[data-pay],[data-edit-bill],[data-add],[data-week],[data-edit-goal],[data-area],[data-del-day],[data-clear-done],[data-edit-target],[data-range],[data-cat],[data-tx],[data-acc],[data-settings],[data-focus],[data-savings],[data-logday],[data-capture],[data-del-inbox],[data-editday],[data-recruit],[data-advance],[data-hl],[data-deposit]');
   if(!el) return; var ds=el.dataset;
   if('settings' in ds) return settingsSheet();
   if(ds.tab) return go(ds.tab);
@@ -959,6 +985,7 @@ document.addEventListener('click',function(e){
   if(ds.mode) return go(ds.mode=='life'?'lifehome':'today');
   if('focus' in ds) return focusSheet();
   if('logday' in ds) return dayLogSheet();
+  if('deposit' in ds) return depositSheet();
   if('capture' in ds) return captureSheet();
   if(ds.hl){ var ww=workWeek(), cur=hoursLeft(ww); S.hoursLeft={week:weekStart(new Date()),hrs:Math.max(0,Math.round((cur+(+ds.hl))*2)/2)}; save(); return render(); }
   if(ds.recruit) return recruitSheet((S.recruits||[]).find(function(x){return x.id==ds.recruit}));
