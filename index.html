@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
 <style id="css">
 :root{
   --bg:#f2f2f4; --card:#ffffff; --ink:#0b0b0c; --muted:#6e6e73; --line:#ececf0; --track:#ececf0;
@@ -214,6 +214,31 @@ input,select,textarea{background:var(--bg)}
 .wq{font-size:20px;font-weight:400;line-height:1.38;letter-spacing:-.01em;margin-top:10px}
 .wq:before{content:"\201C";color:var(--accent);font-size:42px;font-weight:600;display:block;line-height:.6;margin-bottom:4px}
 .wa{font-size:13px;color:var(--muted);margin-top:12px;font-weight:500}
+
+/* ---------- Apple-style motion & materials ---------- */
+html{touch-action:manipulation}
+html,body{font-optical-sizing:auto}
+#app{touch-action:pan-y}
+/* instant press feedback (on touch-down, not release) */
+button,a,label.drop,.tap,.chip,.tile,.card,.box .r,.row,.cat,.fab{transition:transform .32s cubic-bezier(.2,.8,.2,1),background-color .32s,opacity .32s}
+.pressed{transform:scale(.96);transition-duration:.07s!important}
+nav.tabs button.pressed{transform:scale(.88)}
+.box .r.pressed,.row.pressed,.cat.pressed{transform:none;background-color:color-mix(in srgb,var(--ink) 7%,transparent)}
+/* frosted glass: compact top bar + tab bar, content scrolls underneath */
+.topbar{position:fixed;top:0;left:0;right:0;z-index:12;height:calc(46px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 16px 0;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;
+  background:color-mix(in srgb,var(--bg) 70%,transparent);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);box-shadow:0 .5px 0 color-mix(in srgb,var(--ink) 12%,transparent)}
+.topbar span{font-size:16px;font-weight:650;letter-spacing:-.012em;max-width:72%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+nav.tabs{z-index:12;border-top:0;background:color-mix(in srgb,var(--card) 70%,transparent);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);box-shadow:0 -.5px 0 color-mix(in srgb,var(--ink) 12%,transparent)}
+/* sheets: grabber, depth, no scroll chaining */
+.sheet{position:relative;padding-top:8px;box-shadow:0 -10px 40px rgba(0,0,0,.16);overscroll-behavior:contain}
+.grab{width:36px;height:5px;border-radius:3px;background:color-mix(in srgb,var(--muted) 45%,transparent);margin:0 auto 14px}
+/* numbers: columns line up, big figures use Inter's display cut */
+.amt,.cat .a,.stat .v,.vv,.wdays b,.ev .dt b,.tile .tv,.three .vv{font-variant-numeric:tabular-nums}
+.big,.hero .num,.wxr .t,.wxt,.ring .n b,header.top h1{font-variant-numeric:proportional-nums}
+.hero .num{letter-spacing:-.045em}
+@media (prefers-reduced-motion: reduce){.pressed{transform:none!important;opacity:.6}}
+@media (prefers-reduced-transparency: reduce){.topbar,nav.tabs{background:var(--card);backdrop-filter:none;-webkit-backdrop-filter:none}}
+@media (prefers-contrast: more){.topbar,nav.tabs{background:var(--card);box-shadow:0 0 0 1px var(--ink)}}
 </style>
 </head>
 <body>
@@ -974,6 +999,7 @@ function render(){
   document.querySelectorAll('[data-file]').forEach(function(inp){ inp.onchange=function(){ var f=inp.files[0]; if(!f)return;
     if(inp.dataset.file=='csv'){ f.text().then(function(t){ flash=importCSV(t); save(); render(); }); }
     else readPayslip(f); }; });
+  updBar();
 }
 function go(t){tab=t;flash='';catOpen=null;try{localStorage.setItem('fd_tab',t)}catch(e){} try{history.replaceState(null,'','#'+t)}catch(e){} window.scrollTo(0,0); render();}
 document.addEventListener('click',function(e){
@@ -982,7 +1008,7 @@ document.addEventListener('click',function(e){
   if('settings' in ds) return settingsSheet();
   if(ds.tab) return go(ds.tab);
   if(ds.go) return go(ds.go);
-  if(ds.mode) return go(ds.mode=='life'?'lifehome':'today');
+  if(ds.mode) return slideMode(ds.mode=='life'?'lifehome':'today');
   if('focus' in ds) return focusSheet();
   if('logday' in ds) return dayLogSheet();
   if('deposit' in ds) return depositSheet();
@@ -1011,6 +1037,104 @@ document.addEventListener('click',function(e){
   if('editTarget' in ds) return sheet('Weekly pay target','',[{name:'t',label:'Target $ per week',type:'number',value:S.incomeTarget}],function(d){S.incomeTarget=+d.t||0});
   if(ds.add=='bill') return billSheet(); if(ds.add=='income') return incomeSheet(); if(ds.add=='goal') return goalSheet(); if(ds.add=='recruit') return recruitSheet(); if(ds.add=='account') return accSheet();
 });
+/* ---------- motion: springs, sheets, swipes, press feedback (Apple-style) ---------- */
+var RM=!!(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches);
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function rubber(o,dim){var c=.55;return (o*dim*c)/(dim+c*Math.abs(o))}          // soft edge: resists more the further you pull
+function project(v){var d=.998;return (v/1000)*d/(1-d)}                           // where a flick would come to rest
+// Spring with Apple's two knobs: response (s) and damping ratio (1 = no bounce). Re-targeting keeps position + velocity, so it's always interruptible.
+function Spring(update){
+  var s={x:0,v:0,t:0,k:0,c:0,raf:0,done:null,eps:.5};
+  s.set=function(x){cancelAnimationFrame(s.raf);s.raf=0;s.x=x;update(x)};
+  s.stop=function(){cancelAnimationFrame(s.raf);s.raf=0};
+  s.to=function(t,o,done){o=o||{};var r=o.response||.35,z=o.damping==null?1:o.damping;
+    s.t=t;s.k=Math.pow(2*Math.PI/r,2);s.c=4*Math.PI*z/r;if(o.velocity!=null)s.v=o.velocity;s.done=done||null;s.eps=o.eps||.5;
+    if(!s.raf){var last=performance.now();
+      var step=function(now){var dt=Math.min(.064,Math.max(0,(now-last)/1000));last=now;
+        var n=Math.max(1,Math.ceil(dt*240)),h=dt/n;for(var i=0;i<n;i++){var a=-s.k*(s.x-s.t)-s.c*s.v;s.v+=a*h;s.x+=s.v*h}
+        if(Math.abs(s.v)<s.eps*4&&Math.abs(s.x-s.t)<s.eps){s.x=s.t;s.v=0;s.raf=0;update(s.x);var d=s.done;s.done=null;if(d)d();return}
+        update(s.x);s.raf=requestAnimationFrame(step)};
+      s.raf=requestAnimationFrame(step)}
+    return s};
+  return s;
+}
+function Tracker(){var p=[];return{reset:function(){p=[]},add:function(x,y){var t=performance.now();p.push([x,y,t]);while(p.length>2&&t-p[0][2]>100)p.shift()},
+  vel:function(){if(p.length<2||performance.now()-p[p.length-1][2]>80)return[0,0];var a=p[0],b=p[p.length-1],dt=Math.max(.008,(b[2]-a[2])/1000);return[(b[0]-a[0])/dt,(b[1]-a[1])/dt]}}}
+
+// 1. Instant press feedback
+var PRESS='button,a,label.drop,.tap,[data-tab],[data-go],[data-mode],[data-task],[data-del-task],[data-pay],[data-edit-bill],[data-add],[data-week],[data-edit-goal],[data-area],[data-del-day],[data-clear-done],[data-edit-target],[data-range],[data-cat],[data-tx],[data-acc],[data-settings],[data-focus],[data-savings],[data-logday],[data-capture],[data-del-inbox],[data-editday],[data-recruit],[data-advance],[data-hl],[data-deposit]';
+var pressed=null,pressAt=null;
+function unpress(){if(pressed){pressed.classList.remove('pressed');pressed=null}}
+document.addEventListener('pointerdown',function(e){unpress();var el=e.target.closest(PRESS);if(!el||el.disabled)return;pressed=el;pressAt=[e.clientX,e.clientY];el.classList.add('pressed')},{passive:true});
+document.addEventListener('pointermove',function(e){if(pressed&&Math.abs(e.clientX-pressAt[0])+Math.abs(e.clientY-pressAt[1])>10)unpress()},{passive:true});
+document.addEventListener('pointerup',unpress,{passive:true});document.addEventListener('pointercancel',unpress,{passive:true});
+document.addEventListener('touchstart',function(){},{passive:true}); // lets iOS show :active states
+
+// 2. Frosted compact title bar that fades in as the big title scrolls under it
+var bar=document.createElement('div');bar.className='topbar';bar.innerHTML='<span></span>';document.body.appendChild(bar);
+bar.addEventListener('click',function(){window.scrollTo({top:0,behavior:RM?'auto':'smooth'})});
+function updBar(){if(!bar)return;var h=document.querySelector('#app header.top h1');if(!h){bar.style.opacity=0;return}
+  var p=clamp((bar.offsetHeight-h.getBoundingClientRect().bottom)/22,0,1);
+  bar.style.opacity=p;bar.style.pointerEvents=p>.5?'auto':'none';
+  var t=(h.innerText||h.textContent).replace(/\s+/g,' ').trim();if(bar.firstChild.textContent!==t)bar.firstChild.textContent=t}
+window.addEventListener('scroll',updBar,{passive:true});window.addEventListener('resize',updBar);
+
+// 3. Sheets slide up on a spring, drag down to dismiss, and close the way they opened
+var sheetBox=document.getElementById('sheet'),ghost=document.createElement('div');ghost.id='sheet-ghost';document.body.appendChild(ghost);
+function attachSheet(bg){
+  var sh=bg.querySelector('.sheet');if(!sh)return;
+  if(!sh.querySelector('.grab')){var g=document.createElement('div');g.className='grab';sh.insertBefore(g,sh.firstChild)}
+  var H=function(){return sh.offsetHeight||400};
+  var sp=Spring(function(x){var p=clamp(1-x/H(),0,1);
+    if(RM){bg.style.opacity=p}else sh.style.transform=x?'translate3d(0,'+x+'px,0)':'';
+    bg.style.backgroundColor='rgba(5,10,20,'+(.45*p).toFixed(3)+')'});
+  bg._sp=sp;bg._H=H;
+  sp.set(H());sp.to(0,{response:RM?.25:.42,damping:1});
+  var st=null,tr=Tracker();
+  sh.addEventListener('touchstart',function(e){if(e.touches.length>1||e.target.closest('input,textarea,select')){st=null;return}
+    var t=e.touches[0];st={x:t.clientX,y:t.clientY,on:0,base:0};tr.reset();tr.add(t.clientX,t.clientY)},{passive:true});
+  sh.addEventListener('touchmove',function(e){if(!st)return;var t=e.touches[0],dx=t.clientX-st.x,dy=t.clientY-st.y;tr.add(t.clientX,t.clientY);
+    if(!st.on){var canScroll=sh.scrollHeight>sh.clientHeight+1;
+      if((dy>0&&sh.scrollTop<=0&&dy>=Math.abs(dx))||(dy<0&&!canScroll&&-dy>=Math.abs(dx))){e.preventDefault();
+        if(Math.abs(dy)>8){st.on=1;st.y=t.clientY;sp.stop();st.base=sp.x;unpress()}return}
+      if(Math.abs(dx)>8||Math.abs(dy)>8)st=null;return}
+    e.preventDefault();var y=st.base+(t.clientY-st.y);sp.set(y<0?rubber(y,H()):y)},{passive:false});
+  var end=function(){if(!st||!st.on){st=null;return}st=null;var v=tr.vel()[1];
+    if(sp.x+project(v)>H()*.5&&v>-50){sp.v=Math.max(v,0);sheetBox.innerHTML=''}           // thrown or pulled far enough: dismiss, keeping the finger's speed
+    else sp.to(0,{response:.32,damping:Math.abs(v)>300?.8:1,velocity:v})};                  // otherwise spring back (a little bounce only after a flick)
+  sh.addEventListener('touchend',end);sh.addEventListener('touchcancel',end);
+}
+new MutationObserver(function(ms){var add=[],rem=[];
+  ms.forEach(function(m){[].forEach.call(m.addedNodes,function(n){if(n.classList&&n.classList.contains('sheet-bg'))add.push(n)});
+    [].forEach.call(m.removedNodes,function(n){if(n.classList&&n.classList.contains('sheet-bg'))rem.push(n)})});
+  rem.forEach(function(n){if(add.length||!n._sp)return;var a=document.activeElement;if(a&&a.blur&&n.contains(a))a.blur();
+    n.style.pointerEvents='none';ghost.appendChild(n);n._sp.to(n._H(),{response:RM?.2:.34,damping:1,eps:2},function(){n.remove()})});
+  add.forEach(attachSheet);
+}).observe(sheetBox,{childList:true});
+
+// 4. Swipe between Life and Work (Life sits to the left of Work)
+var app=document.getElementById('app'),busy=false;
+var appSp=Spring(function(x){app.style.transform=Math.abs(x)>.1?'translate3d('+x+'px,0,0)':''});
+function towardSign(){return isLife()?-1:1}       // finger direction that leads to the other side
+function slideMode(target,v){
+  if(busy)return;
+  if(RM){go(target);if(app.animate)app.animate([{opacity:0},{opacity:1}],{duration:180});return}
+  var sgn=LIFE_TABS.indexOf(target)>=0?1:-1,W=window.innerWidth;busy=true;
+  appSp.to(sgn*W,{response:.3,damping:1,velocity:v||0,eps:8},function(){
+    go(target);appSp.set(-sgn*W);
+    appSp.to(0,{response:.42,damping:1,velocity:(v||0)*.4},function(){busy=false});setTimeout(function(){busy=false},900)});
+}
+var sw=null,swt=Tracker();
+app.addEventListener('touchstart',function(e){if(busy||e.touches.length>1||sheetBox.firstChild||e.target.closest('.chips,input,textarea,select')){sw=null;return}
+  var t=e.touches[0];sw={x:t.clientX,y:t.clientY,on:0};swt.reset();swt.add(t.clientX,t.clientY);appSp.stop()},{passive:true});
+app.addEventListener('touchmove',function(e){if(!sw)return;var t=e.touches[0],dx=t.clientX-sw.x,dy=t.clientY-sw.y;swt.add(t.clientX,t.clientY);
+  if(!sw.on){if(Math.abs(dx)>10&&Math.abs(dx)>Math.abs(dy)*1.2){sw.on=1;sw.x=t.clientX-appSp.x;unpress()}else if(Math.abs(dy)>10)sw=null;return}
+  e.preventDefault();var d=t.clientX-sw.x;appSp.set(d*towardSign()>0?d:rubber(d,window.innerWidth))},{passive:false});
+var swEnd=function(){if(!sw||!sw.on){sw=null;return}sw=null;var v=swt.vel()[0],s=towardSign(),x=appSp.x;
+  if((x+project(v))*s>window.innerWidth*.4&&x*s>0)slideMode(isLife()?'today':'lifehome',v);
+  else appSp.to(0,{response:.35,damping:Math.abs(v)>300?.8:1,velocity:v})};
+app.addEventListener('touchend',swEnd);app.addEventListener('touchcancel',swEnd);
+
 window.addEventListener('hashchange',function(){var h=location.hash.slice(1); if(WORK_TABS.concat(LIFE_TABS).indexOf(h)>=0 && h!=tab){tab=h;render();}});
 render();
 pull();
