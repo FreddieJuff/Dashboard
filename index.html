@@ -174,7 +174,7 @@ input,select,textarea{background:var(--bg)}
 .notice{background:var(--accent-soft);color:var(--accent)}
 .sheet{background:var(--card)}
 /* life home sections */
-.sec{margin-top:22px}
+.sec{margin-top:30px}
 .sh{display:flex;justify-content:space-between;align-items:baseline;padding:0 6px 8px}
 .sh h3{margin:0;font-size:20px;font-weight:700;letter-spacing:-.02em}
 .sh button{background:none;color:var(--accent);font-weight:600;font-size:13px;padding:0}
@@ -236,6 +236,12 @@ nav.tabs{z-index:12;border-top:0;background:color-mix(in srgb,var(--card) 70%,tr
 .amt,.cat .a,.stat .v,.vv,.wdays b,.ev .dt b,.tile .tv,.three .vv{font-variant-numeric:tabular-nums}
 .big,.hero .num,.wxr .t,.wxt,.ring .n b,header.top h1{font-variant-numeric:proportional-nums}
 .hero .num{letter-spacing:-.045em}
+.notes{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:14px -16px 0;padding:2px 16px}
+.notes::-webkit-scrollbar{display:none}
+.nb{display:flex;align-items:center;gap:7px;flex:none;background:var(--card);color:var(--ink);font-weight:600;font-size:14px;padding:10px 15px;border-radius:99px;white-space:nowrap}
+.nb i{width:7px;height:7px;border-radius:50%;background:var(--accent);margin-left:1px}
+.note-sheet h3{font-size:24px;font-weight:700;letter-spacing:-.022em;margin:4px 0 12px}
+.nl{font-size:16px;line-height:1.45;margin:0;padding:13px 0;border-top:1px solid var(--line)}
 @media (prefers-reduced-motion: reduce){.pressed{transform:none!important;opacity:.6}}
 @media (prefers-reduced-transparency: reduce){.topbar,nav.tabs{background:var(--card);backdrop-filter:none;-webkit-backdrop-filter:none}}
 @media (prefers-contrast: more){.topbar,nav.tabs{background:var(--card);box-shadow:0 0 0 1px var(--ink)}}
@@ -782,7 +788,7 @@ function shortDay(d){return parse(d).toLocaleDateString('en-AU',{weekday:'short'
 function vLifeHome(){
   loadWeather();
   var o=header(greet(),1);
-  o+=eveningCards()+briefCard()+inboxCard();
+  o+=noteButtons();
   // TODAY
   o+='<div class="sec"><div class="sh"><h3>Today</h3></div><div class="box">';
   if(weather&&weather.j){ var c=weather.j.current, dl=weather.j.daily, w=wx(c.weather_code);
@@ -801,16 +807,17 @@ function vLifeHome(){
     '<div class="r hero tap" data-go="money"><div class="lbl">Safe to spend</div><div class="num '+(st.safe<0?'neg':'')+'"><span>$</span>'+Math.round(st.safe).toLocaleString('en-AU')+'</div><div class="meta"><b>'+money(st.safe/st.days)+'</b> a day until payday</div></div>'+
     '<div class="two"><div class="tap" data-go="money"><div class="lbl">Money in</div><div class="vv">'+parse(st.pd).toLocaleDateString('en-AU',{weekday:'short',day:'numeric'})+'</div><div class="ss">Payday · '+countdown(st.pd).toLowerCase()+'</div></div>'+
     '<div class="tap" data-go="money"><div class="lbl">Money out</div><div class="vv">'+(nb?money(nb.amount):'–')+'</div><div class="ss">'+(nb?esc(nb.name.replace(/\s*\(.*\)/,''))+' · '+parse(nb.due).toLocaleDateString('en-AU',{weekday:'short',day:'numeric'}):'Nothing due')+'</div></div></div>'+
-    '<div class="r fx tap" data-savings>'+ringSvg(56,5,sp,'var(--ink)','<div style="font-size:12px;font-weight:600">'+Math.round(sp*100)+'%</div>')+'<div><div class="lbl">Savings'+(sv.label?' · '+esc(sv.label):'')+'</div><div class="vv">'+money(scur)+' <span>/ '+money(sv.target||0)+'</span></div><div class="ss">'+(sv.target?(sv.target-scur>0?money(sv.target-scur)+' to go':'Goal reached 🎉'):'Tap to set a goal')+'</div></div></div>'+
     '</div></div>';
   // COMING UP
   var items=[]; if(f&&f.date&&daysUntil(f.date)>=0) items.push({title:f.title,start:f.date+'T00:00:00',allDay:true,focus:1});
   var hasCal=events&&Array.isArray(events.list);
   if(hasCal) events.list.forEach(function(e){ if(!(f&&f.date&&e.allDay&&iso(new Date(e.start))==f.date&&e.title==f.title)) items.push(e); });
   items.sort(function(a,b){return new Date(a.start)-new Date(b.start)});
-  o+='<div class="sec"><div class="sh"><h3>Coming up</h3></div><div class="box">'+(items.length?items.slice(0,5).map(function(e){var d=new Date(e.start), di=iso(d);
+  o+='<div class="sec"><div class="sh"><h3>Coming up</h3>'+(items.length>2?'<button data-allev>'+(allEv?'Less':'All '+Math.min(items.length,8))+'</button>':'')+'</div><div class="box">'+(items.length?items.slice(0,allEv?8:2).map(function(e){var d=new Date(e.start), di=iso(d);
       return '<div class="r ev"><div class="dt"><small>'+shortDay(di)+'</small><b>'+d.getDate()+'</b></div><div><div class="tt">'+(e.birthday?'🎂 ':'')+esc(e.title)+'</div><div class="ss">'+(e.allDay?'All day':d.toLocaleTimeString('en-AU',{hour:'numeric',minute:'2-digit'}))+(e.focus?' · Focus':e.cal?' · '+esc(e.cal):'')+'</div></div></div>'}).join(''):'<div class="r"><div class="ss">Nothing in the next 3 weeks.</div></div>')+
     (hasCal?'':'<div class="r"><div class="ss">Your Google Calendar shows here once your Google script is updated.</div></div>')+'</div></div>';
+  // SAVINGS
+  o+='<div class="sec"><div class="sh"><h3>Savings</h3></div><div class="box">'+'<div class="r fx tap" data-savings>'+ringSvg(56,5,sp,'var(--ink)','<div style="font-size:12px;font-weight:600">'+Math.round(sp*100)+'%</div>')+'<div><div class="lbl">Savings'+(sv.label?' · '+esc(sv.label):'')+'</div><div class="vv">'+money(scur)+' <span>/ '+money(sv.target||0)+'</span></div><div class="ss">'+(sv.target?(sv.target-scur>0?money(sv.target-scur)+' to go':'Goal reached 🎉'):'Tap to set a goal')+'</div></div></div>'+'</div></div>';
   // HEALTH
   var goal=S.stepGoal||10000, steps=S.steps||{}, td=iso(), today=+steps[td]||0, days=[];
   for(var k=6;k>=0;k--){var dd=new Date(); dd.setDate(dd.getDate()-k); days.push(iso(dd));}
@@ -838,6 +845,32 @@ function captureSheet(){
     close(); flash='Added to Inbox'; save(); render(); };
   setTimeout(function(){var t=document.getElementById('ct'); if(t) t.focus();},60);
 }
+var READ={}; try{READ=JSON.parse(localStorage.getItem('fd_read')||'{}')||{}}catch(e){}
+var allEv=false;
+function noteList(){ var n=[], d=new Date(), dy=d.getDay(), hr=d.getHours(), ok=function(x){return x&&x.lines&&x.lines.length};
+  if(ok(S.brief)&&S.brief.date==iso()) n.push({k:'brief',ic:'☀️',t:'Morning brief',d:S.brief});
+  if(ok(S.wrap)&&S.wrap.date==iso()) n.push({k:'wrap',ic:'🌙',t:'Evening wrap-up',d:S.wrap});
+  if(ok(S.review)&&S.review.date&&daysUntil(S.review.date)>=-2&&(dy==0||(dy==1&&hr<12))) n.push({k:'review',ic:'📋',t:'Weekly review',d:S.review});   // Sundays + Monday morning only
+  return n; }
+function noteButtons(){ var o='';
+  noteList().forEach(function(x){ o+='<button class="nb" data-note="'+x.k+'"><span>'+x.ic+'</span>'+x.t+(READ[x.k]!==x.d.date?'<i></i>':'')+'</button>'; });
+  if(S.inbox.length) o+='<button class="nb" data-inbox><span>📥</span>'+S.inbox.length+' to sort</button>';
+  return o?'<div class="notes">'+o+'</div>':''; }
+function noteSheet(k){ var x=noteList().find(function(n){return n.k==k}); if(!x) return;
+  READ[k]=x.d.date; try{localStorage.setItem('fd_read',JSON.stringify(READ))}catch(e){} render();
+  var el=document.getElementById('sheet');
+  el.innerHTML='<div class="sheet-bg" id="sb"><div class="sheet note-sheet"><div class="lbl" style="color:var(--accent)">'+(x.d.date?fmtDate(x.d.date):'')+'</div><h3>'+x.ic+' '+x.t+'</h3>'+
+    x.d.lines.map(function(l){return '<p class="nl">'+esc(l)+'</p>'}).join('')+'<button type="button" class="btn" id="nd" style="margin-top:16px">Done</button></div></div>';
+  var close=function(){el.innerHTML=''};
+  document.getElementById('sb').onclick=function(e){if(e.target.id=='sb')close()};
+  document.getElementById('nd').onclick=close; }
+function inboxSheet(){ var el=document.getElementById('sheet');
+  el.innerHTML='<div class="sheet-bg" id="sb"><div class="sheet note-sheet"><h3>📥 Inbox</h3><p class="sub">Claude sorts these into tasks, spending, your calendar and ideas at about 12pm, 6pm and 10pm. Tap × once you\'ve sorted one yourself.</p>'+
+    S.inbox.map(function(i){return '<div class="r nl" style="display:flex;gap:10px;align-items:center"><div style="flex:1;min-width:0"><div>'+(i.q?'❓ ':'')+esc(i.text)+'</div>'+(i.q?'<div class="ss">'+esc(i.note||'Not sure where this goes.')+'</div>':'')+'</div><button class="x" data-del-inbox="'+i.id+'">×</button></div>'}).join('')+
+    '<button type="button" class="btn" id="nd" style="margin-top:16px">Done</button></div></div>';
+  var close=function(){el.innerHTML=''};
+  document.getElementById('sb').onclick=function(e){if(e.target.id=='sb')close()};
+  document.getElementById('nd').onclick=close; }
 function inboxCard(){
   if(!S.inbox.length) return '';
   return '<div class="sec"><div class="sh"><h3>Inbox</h3><span class="ss">'+S.inbox.length+' to sort</span></div><div class="box">'+
@@ -1003,7 +1036,7 @@ function render(){
 }
 function go(t){tab=t;flash='';catOpen=null;try{localStorage.setItem('fd_tab',t)}catch(e){} try{history.replaceState(null,'','#'+t)}catch(e){} window.scrollTo(0,0); render();}
 document.addEventListener('click',function(e){
-  var el=e.target.closest('[data-tab],[data-go],[data-mode],[data-task],[data-del-task],[data-pay],[data-edit-bill],[data-add],[data-week],[data-edit-goal],[data-area],[data-del-day],[data-clear-done],[data-edit-target],[data-range],[data-cat],[data-tx],[data-acc],[data-settings],[data-focus],[data-savings],[data-logday],[data-capture],[data-del-inbox],[data-editday],[data-recruit],[data-advance],[data-hl],[data-deposit]');
+  var el=e.target.closest('[data-tab],[data-go],[data-mode],[data-task],[data-del-task],[data-pay],[data-edit-bill],[data-add],[data-week],[data-edit-goal],[data-area],[data-del-day],[data-clear-done],[data-edit-target],[data-range],[data-cat],[data-tx],[data-acc],[data-settings],[data-focus],[data-savings],[data-logday],[data-capture],[data-del-inbox],[data-editday],[data-recruit],[data-advance],[data-hl],[data-deposit],[data-note],[data-inbox],[data-allev]');
   if(!el) return; var ds=el.dataset;
   if('settings' in ds) return settingsSheet();
   if(ds.tab) return go(ds.tab);
@@ -1013,11 +1046,14 @@ document.addEventListener('click',function(e){
   if('logday' in ds) return dayLogSheet();
   if('deposit' in ds) return depositSheet();
   if('capture' in ds) return captureSheet();
+  if(ds.note) return noteSheet(ds.note);
+  if('inbox' in ds) return inboxSheet();
+  if('allev' in ds){ allEv=!allEv; return render(); }
   if(ds.hl){ var ww=workWeek(), cur=hoursLeft(ww); S.hoursLeft={week:weekStart(new Date()),hrs:Math.max(0,Math.round((cur+(+ds.hl))*2)/2)}; save(); return render(); }
   if(ds.recruit) return recruitSheet((S.recruits||[]).find(function(x){return x.id==ds.recruit}));
   if(ds.advance){ var rr=(S.recruits||[]).find(function(x){return x.id==ds.advance}); var ni=STAGES.indexOf(rr.stage)+1; if(ni<8){ setStage(rr,STAGES[ni]); save(); render(); } return; }
   if(ds.editday) return dayLogSheet(S.days.find(function(x){return x.id==ds.editday}));
-  if(ds.delInbox){ S.inbox=S.inbox.filter(function(x){return x.id!=ds.delInbox}); save(); return render(); }
+  if(ds.delInbox){ S.inbox=S.inbox.filter(function(x){return x.id!=ds.delInbox}); var ir=el.closest('#sheet .r'); if(ir){ ir.remove(); if(!S.inbox.length) document.getElementById('sheet').innerHTML=''; } save(); return render(); }
   if('savings' in ds) return savingsSheet();
   if(ds.task){var t=S.tasks.find(function(x){return x.id==ds.task}); t.done=!t.done; save(); return render();}
   if(ds.delTask){S.tasks=S.tasks.filter(function(x){return x.id!=ds.delTask}); save(); return render();}
@@ -1062,7 +1098,7 @@ function Tracker(){var p=[];return{reset:function(){p=[]},add:function(x,y){var 
   vel:function(){if(p.length<2||performance.now()-p[p.length-1][2]>80)return[0,0];var a=p[0],b=p[p.length-1],dt=Math.max(.008,(b[2]-a[2])/1000);return[(b[0]-a[0])/dt,(b[1]-a[1])/dt]}}}
 
 // 1. Instant press feedback
-var PRESS='button,a,label.drop,.tap,[data-tab],[data-go],[data-mode],[data-task],[data-del-task],[data-pay],[data-edit-bill],[data-add],[data-week],[data-edit-goal],[data-area],[data-del-day],[data-clear-done],[data-edit-target],[data-range],[data-cat],[data-tx],[data-acc],[data-settings],[data-focus],[data-savings],[data-logday],[data-capture],[data-del-inbox],[data-editday],[data-recruit],[data-advance],[data-hl],[data-deposit]';
+var PRESS='button,a,label.drop,.tap,[data-tab],[data-go],[data-mode],[data-task],[data-del-task],[data-pay],[data-edit-bill],[data-add],[data-week],[data-edit-goal],[data-area],[data-del-day],[data-clear-done],[data-edit-target],[data-range],[data-cat],[data-tx],[data-acc],[data-settings],[data-focus],[data-savings],[data-logday],[data-capture],[data-del-inbox],[data-editday],[data-recruit],[data-advance],[data-hl],[data-deposit],[data-note],[data-inbox],[data-allev]';
 var pressed=null,pressAt=null;
 function unpress(){if(pressed){pressed.classList.remove('pressed');pressed=null}}
 document.addEventListener('pointerdown',function(e){unpress();var el=e.target.closest(PRESS);if(!el||el.disabled)return;pressed=el;pressAt=[e.clientX,e.clientY];el.classList.add('pressed')},{passive:true});
@@ -1125,7 +1161,7 @@ function slideMode(target,v){
     appSp.to(0,{response:.42,damping:1,velocity:(v||0)*.4},function(){busy=false});setTimeout(function(){busy=false},900)});
 }
 var sw=null,swt=Tracker();
-app.addEventListener('touchstart',function(e){if(busy||e.touches.length>1||sheetBox.firstChild||e.target.closest('.chips,input,textarea,select')){sw=null;return}
+app.addEventListener('touchstart',function(e){if(busy||e.touches.length>1||sheetBox.firstChild||e.target.closest('.chips,.notes,input,textarea,select')){sw=null;return}
   var t=e.touches[0];sw={x:t.clientX,y:t.clientY,on:0};swt.reset();swt.add(t.clientX,t.clientY);appSp.stop()},{passive:true});
 app.addEventListener('touchmove',function(e){if(!sw)return;var t=e.touches[0],dx=t.clientX-sw.x,dy=t.clientY-sw.y;swt.add(t.clientX,t.clientY);
   if(!sw.on){if(Math.abs(dx)>10&&Math.abs(dx)>Math.abs(dy)*1.2){sw.on=1;sw.x=t.clientX-appSp.x;unpress()}else if(Math.abs(dy)>10)sw=null;return}
