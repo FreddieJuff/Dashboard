@@ -261,7 +261,7 @@ if(!S.rules||typeof S.rules!=='object') S.rules={};
 if(!S.incomeTarget) S.incomeTarget=1200;
 
 var WORK_AREAS=['ELEMNT','Orexis','Geelong'], LIFE_AREAS=['Personal','Money','Store','Ideas'];
-var WORK_TABS=['today','pay','trends','recruits','goals','worktasks'], LIFE_TABS=['lifehome','money','spending','lifetasks'];
+var WORK_TABS=['today','pay','trends','recruits','goals','worktasks'], LIFE_TABS=['lifehome','money','lifetasks'];
 var TAB_LABEL={pay:'Pay',trends:'Trends',recruits:'Recruits',lifehome:'Home',today:'Today',goals:'Goals',worktasks:'Tasks',money:'Money',spending:'Spending',lifetasks:'Tasks'};
 var CATS={
   'Pay':{c:'#1f9d63',k:['orexis','salary','wages','payroll','employment hero']},
@@ -280,7 +280,7 @@ var CAT_NAMES=Object.keys(CATS);
 var tab='today', areaFilter='All', spendRange='month', catOpen=null, art=null, timer=null, flash='';
 tab='lifehome';
 try{ history.replaceState(null,'','#lifehome'); }catch(e){}
-function isLife(){return LIFE_TABS.indexOf(tab)>=0}
+function isLife(){return LIFE_TABS.indexOf(tab)>=0||['spendmoney','networth','movingin','paybills','spending'].indexOf(tab)>=0}
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function uid(){return Math.random().toString(36).slice(2,10)}
@@ -628,6 +628,73 @@ function applyUp(u){
   var changed=JSON.stringify([S.accounts,S.tx])!==before;
   if(changed) S.accountsUpdated=iso();
   return changed;
+}
+/* ---------- Money (minimal) ---------- */
+var LIFE_SUB=['spendmoney','networth','movingin','paybills','spending'];
+function backBar(){ return '<button class="link" data-go="money" style="font-size:15px;font-weight:600;padding:14px 0 0;display:flex;align-items:center;gap:2px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Money</button>'; }
+function spendAccount(){ return S.accounts.find(function(a){return a.spend})||S.accounts[0]; }
+function lastPayday(){ return addDays(nextPayday(),-7); }
+function spendBudget(){ return +S.spendBudget||350; }
+function weekSpend(){
+  var from=lastPayday(), by={}, total=0, list=S.tx.filter(function(t){return t.date>=from&&t.amt<0&&t.cat!='Transfers'});
+  list.forEach(function(t){ total+=-t.amt; by[t.cat]=(by[t.cat]||0)-t.amt; });
+  return {from:from,total:total,by:by,list:list};
+}
+function netWorth(){ var list=S.accounts.map(function(a){ var share=a.mine===false?0.5:1; return {a:a,share:share,v:(+a.bal||0)*share}; }); return {list:list,total:list.reduce(function(s,x){return s+x.v},0)}; }
+function savingsInfo(){
+  var sv=S.savings||{}, acc=S.accounts.find(function(a){return a.id==sv.acc}), cur=acc?(+acc.bal||0):(+sv.cur||0), target=+sv.target||0, weekly=+S.saveWeekly||150;
+  var left=Math.max(0,target-cur), weeks=weekly?Math.ceil(left/weekly):0, eta=weeks?addDays(nextPayday(),(weeks-1)*7):iso();
+  return {label:sv.label||'Savings',acc:acc,cur:cur,target:target,pct:target?Math.min(1,cur/target):0,weekly:weekly,weeks:weeks,eta:eta,left:left};
+}
+function nextPayEst(){ var pd=nextPayday(), wk=addDays(weekStart(parse(pd)),-7), e=wk==weekStart(new Date())?weekProjection().proj:payForWeek(wk); return {date:pd,net:e.net,has:!!e.hours}; }
+function nextBill(){ return S.bills.filter(function(b){return !b.paid&&!paused(b)&&!b.fromSaver}).sort(function(a,b){return a.due<b.due?-1:1})[0]; }
+function dShort(d){ var x=parse(d); return x.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][x.getMonth()]; }
+function mbar(p,h,col){ return '<div style="height:'+h+'px;background:var(--line);border-radius:9px;overflow:hidden;margin:12px 0 7px"><div style="width:'+Math.max(0,Math.min(100,p*100))+'%;height:100%;background:'+(col||'var(--ink)')+';border-radius:9px"></div></div>'; }
+var LIVE='<span style="font-size:12px;font-weight:600;color:var(--ok)">● Live</span>';
+function vMoney(){
+  var o=header('Money'), sa=spendAccount(), ws=weekSpend(), nw=netWorth(), si=savingsInfo(), np=nextPayEst(), nb=nextBill();
+  o+='<div class="sec"><div class="box"><div class="r tap" data-go="spendmoney" style="padding:18px 18px 16px">'+
+     '<div style="display:flex;justify-content:space-between;align-items:center"><div class="lbl">Spending money</div>'+(sa&&sa.live?LIVE:'')+'</div>'+
+     '<div style="font-size:48px;font-weight:700;letter-spacing:-.045em;line-height:1.05;margin-top:6px">'+money(sa?sa.bal:0)+'</div>'+
+     mbar(ws.total/spendBudget(),6)+'<div class="ss">'+money(ws.total)+' of '+money(spendBudget())+' spent this week</div></div></div></div>';
+  o+='<div class="sec"><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">'+
+     '<div class="box"><div class="r tap" data-go="networth" style="padding:16px 18px"><div class="lbl">Net worth</div><div class="vv" style="font-size:28px;margin-top:4px">'+money(nw.total)+'</div><div class="ss">'+S.accounts.length+' accounts</div></div></div>'+
+     '<div class="box"><div class="r tap" data-go="movingin" style="padding:16px 18px"><div class="lbl">'+esc(si.label.replace(/ with .*/,''))+'</div><div class="vv" style="font-size:28px;margin-top:4px">'+money(si.cur)+'</div>'+mbar(si.pct,4,'var(--ok)').replace('margin:12px 0 7px','margin:6px 0 5px')+'<div class="ss">'+Math.round(si.pct*100)+'% of '+money(si.target)+'</div></div></div>'+
+     '</div></div>';
+  o+='<div class="sec"><div class="box"><div class="r tap" data-go="paybills" style="padding:16px 18px;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
+     '<div><div class="lbl">Next pay</div><div class="vv" style="font-size:24px;margin-top:4px">'+(np.has?'~'+money(np.net):'–')+'</div><div class="ss">'+payLabel(np.date)+'</div></div>'+
+     '<div style="text-align:right;min-width:0"><div class="lbl">Next bill</div><div style="font-size:16px;font-weight:600;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(nb?esc(nb.name.replace(/ \(.*\)/,'')):'None due')+'</div><div class="ss">'+(nb?money(nb.amount)+' · '+dShort(nb.due):'')+'</div></div></div></div></div>';
+  return o;
+}
+function vSpendMoney(){
+  var o=backBar()+header('Spending money'), sa=spendAccount(), ws=weekSpend(), cats=Object.keys(ws.by).sort(function(a,b){return ws.by[b]-ws.by[a]});
+  var left=spendBudget()-ws.total;
+  o+='<div class="sec"><div class="box"><div class="two" style="border-top:0"><div><div class="lbl">In '+esc(sa?sa.name:'account')+'</div><div class="vv">'+money(sa?sa.bal:0)+'</div><div class="ss">'+(sa&&sa.live?'Live from Up':'Updated '+(S.accountsUpdated?fmtDate(S.accountsUpdated):'never'))+'</div></div>'+
+     '<div><div class="lbl">Spent this week</div><div class="vv">'+money(ws.total)+'</div><div class="ss">'+(left>=0?money(left)+' left of '+money(spendBudget()):money(-left)+' over budget')+'</div></div></div>'+
+     '<div class="r">'+mbar(ws.total/spendBudget(),6,left<0?'var(--bad,#d64545)':'').replace('margin:12px 0 7px','margin:0')+'<div class="ss" style="margin-top:8px">Week runs from payday, '+payLabel(ws.from)+'.</div></div></div></div>';
+  o+='<div class="sec"><div class="sh"><h3>By category</h3></div><div class="box">'+(cats.length?cats.map(function(c){
+     return '<div class="r" style="display:flex;align-items:center;gap:10px"><span class="dot" style="background:'+CATS[c].c+';width:9px;height:9px;border-radius:50%;flex:none"></span><span style="flex:1;font-size:15px">'+esc(c)+'</span><span style="font-weight:600">'+money(ws.by[c],1)+'</span></div>';}).join(''):'<div class="r"><div class="ss">Nothing spent yet this week.</div></div>')+'</div></div>';
+  var recent=S.tx.filter(function(t){return t.cat!='Transfers'}).slice(0,12);
+  o+='<div class="sec"><div class="sh"><h3>Recent</h3><button data-go="spending">History ›</button></div><div class="box"><div class="r" style="padding-top:4px;padding-bottom:4px">'+(recent.length?recent.map(txRow).join(''):'<div class="ss" style="padding:10px 0">No purchases yet.</div>')+'</div></div>'+
+     '<div class="ss" style="margin:8px 4px 0">Tap a purchase to change its category. It remembers for next time.</div></div>';
+  return o;
+}
+function vNetWorth(){
+  var o=backBar()+header('Net worth'), nw=netWorth();
+  o+='<div class="sec"><div class="box"><div class="r hero"><div class="lbl">Total</div><div class="num"><span>$</span>'+Math.round(nw.total).toLocaleString('en-AU')+'</div><div class="meta">Joint accounts count as your half'+(upErr?' · <span style="color:var(--bad,#d64545)">Up: '+esc(upErr)+'</span>':'')+'</div></div>'+
+     nw.list.map(function(x){ var a=x.a; return '<div class="r tap" data-acc="'+a.id+'" style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div><div style="font-size:16px;font-weight:600">'+esc(a.name)+(a.live?' '+LIVE:'')+'</div><div class="ss" style="margin-top:2px">'+esc(a.role||'')+(x.share<1?' · your half of '+money(a.bal,1):'')+'</div></div><div style="font-weight:700;font-size:16px;white-space:nowrap">'+money(x.v,1)+'</div></div>'; }).join('')+
+     '<div class="r" style="display:flex;justify-content:space-between"><div class="ss" style="margin:0">Updated '+(S.accountsUpdated?fmtDate(S.accountsUpdated):'never')+'</div><button class="link" data-add="account">+ Add account</button></div></div>'+
+     '<div class="ss" style="margin:8px 4px 0">Tap an account to update its balance. Live ones update by themselves.</div></div>';
+  return o;
+}
+function vMovingIn(){
+  var o=backBar()+header(esc((S.savings||{}).label||'Savings')), si=savingsInfo();
+  o+='<div class="sec"><div class="box"><div class="r hero"><div class="lbl">Saved'+(si.acc&&si.acc.live?' · '+LIVE:'')+'</div><div class="num"><span>$</span>'+Math.round(si.cur).toLocaleString('en-AU')+'</div>'+mbar(si.pct,8,'var(--ok)')+'<div class="meta"><b>'+Math.round(si.pct*100)+'%</b> of '+money(si.target)+' · '+money(si.left)+' to go</div></div>'+
+     '<div class="two"><div><div class="lbl">Each Thursday</div><div class="vv">'+money(si.weekly)+'</div><div class="ss">into '+esc(si.acc?si.acc.name:'savings')+'</div></div>'+
+     '<div><div class="lbl">On track for</div><div class="vv">'+(si.left?dShort(si.eta):'Done 🎉')+'</div><div class="ss">'+(si.left?si.weeks+' more payday'+(si.weeks>1?'s':''):'Goal reached')+'</div></div></div>'+
+     [0.25,0.5,0.75,1].map(function(m){ var hit=si.pct>=m, wk=Math.max(0,Math.ceil((si.target*m-si.cur)/si.weekly)); return '<div class="r" style="display:flex;justify-content:space-between;'+(hit?'opacity:.55':'')+'"><div style="font-size:15px">'+(hit?'✓ ':'')+money(si.target*m)+' · '+(m*100)+'%</div><div class="ss" style="margin:0">'+(hit?'Reached':wk<=1?'Next Thursday':dShort(addDays(nextPayday(),(wk-1)*7)))+'</div></div>'; }).join('')+
+     '<div class="r"><button class="link" data-savings>Edit goal</button></div></div></div>';
+  return o;
 }
 /* ---------- Pay ---------- */
 function payRate(){ return +S.payRate||33.85; }
@@ -1004,7 +1071,7 @@ function savingsSheet(){
     function(d){ var a=S.accounts.find(function(x){return x.name==d.acc}); S.savings={label:d.label,target:+d.target||0,acc:a?a.id:'',cur:+d.cur||0}; });
 }
 
-function vMoney(){
+function vPayBills(){
   var active=S.bills.filter(function(b){return !b.paid&&!paused(b)}).sort(function(a,b){return a.due<b.due?-1:1});
   var held=S.bills.filter(function(b){return paused(b)});
   var paid=S.bills.filter(function(b){return b.paid});
@@ -1013,31 +1080,30 @@ function vMoney(){
   var weeks=weeklyPay().slice(-8);
   var avg=weeks.length?weeks.reduce(function(a,w){return a+(+w.amount||0)},0)/weeks.length:0;
   var mine=S.accounts.filter(function(a){return a.mine!==false}).reduce(function(s,a){return s+(+a.bal||0)},0);
-  var o=header('Money');
+  var o=backBar()+header('Pay & bills');
   var spendAcc=S.accounts.find(function(a){return a.spend})||S.accounts[0];
   var pd=nextPayday(), dl=Math.max(1,daysUntil(pd));
   var dueBefore=active.filter(function(b){return !b.fromSaver&&b.due<=pd}).reduce(function(a,b){return a+(+b.amount||0)},0);
   var safe=spendAcc?(+spendAcc.bal||0)-dueBefore:0;
-  o+='<div class="card"><h2>Safe to spend until payday</h2><div class="big '+(safe<0?'neg':'')+'">'+money(safe)+'</div><div class="muted">About '+money(safe/dl)+' a day until '+fmtDate(pd)+(spendAcc?' · from '+esc(spendAcc.name):'')+(dueBefore?' · after '+money(dueBefore)+' of bills due first':'')+'. Rent is already set aside in your Saver.</div></div>';
+  var np=nextPayEst(), PLAN=S.plan||[['Rent','NetBank Saver',250],['Spending','Up',350],['Moving in','Up Saver',150],['Joint','Revolut',50],['Buffer','stays in CommBank',100]];
+  o+='<div class="card"><h2>Next pay</h2><div class="big">'+(np.has?'~'+money(np.net):'–')+'</div><div class="muted">'+fmtDate(np.date)+' · estimate from your KPI results. Full breakdown in Work → Pay.</div></div>';
+  o+='<div class="card"><h2>Bills &amp; fixed costs <button class="link" data-add="bill">+ Add</button></h2>'+
+     (active.length?active.map(billRow).join(''):'<div class="empty">Nothing due. Add your bills so nothing sneaks up on you.</div>')+
+     (held.length?'<div class="muted" style="margin:14px 0 4px;font-weight:700">Paused</div>'+held.map(billRow).join(''):'')+
+     (paid.length?'<div class="muted" style="margin:14px 0 4px;font-weight:700">Paid</div>'+paid.map(billRow).join(''):'')+
+     '<div class="muted" style="margin-top:8px">Tick when paid; repeating bills roll on to the next due date.</div></div>';
+  o+='<div class="card"><h2>Thursday plan</h2>'+PLAN.map(function(x){return '<div class="row"><div class="grow"><div class="t">'+esc(x[0])+'</div><div class="s">'+esc(x[1])+'</div></div><div class="amt">'+money(x[2])+'</div></div>'}).join('')+'<div class="muted" style="margin-top:6px">Based on '+money(PLAN.reduce(function(a,x){return a+x[2]},0))+' a week. Anything extra is a bonus.</div></div>';
   o+='<div class="card"><h2>Typical week</h2><div class="stats"><div class="stat"><div class="v">'+(avg?money(avg):'–')+'</div><div class="l">Avg take-home</div></div><div class="stat"><div class="v">'+money(fw)+'</div><div class="l">Fixed costs</div></div><div class="stat"><div class="v '+(avg?(avg-fw>=0?'pos':'neg'):'')+'">'+(avg?money(avg-fw):'–')+'</div><div class="l">For food, fuel, saving</div></div></div><div class="muted" style="margin-top:8px">Based on '+weeks.length+' week'+(weeks.length==1?'':'s')+' of pay. This is a normal week on paper, not money you have right now. Food, fuel and other day-to-day spending come out of the last number.</div></div>';
-  o+='<div class="card"><h2>My accounts <button class="link" data-add="account">+ Add</button></h2><div class="big">'+money(mine,1)+'</div><div class="muted">Mine in total · updated '+(S.accountsUpdated?fmtDate(S.accountsUpdated):'never')+(upErr?' · <span style="color:var(--bad,#d64545)">Up: '+esc(upErr)+'</span>':S.upAt?' · Up live':'')+'</div>'+
-     S.accounts.map(function(a){return '<div class="row tap" data-acc="'+a.id+'"><div class="grow"><div class="t">'+esc(a.name)+(a.mine===false?' <span class="badge z-silver">Joint</span>':'')+(a.live?' <span class="badge z-silver" style="color:var(--ok)">● Live</span>':'')+'</div><div class="s">'+esc(a.role||'')+'</div></div><div class="amt">'+money(a.bal,1)+'</div></div>'}).join('')+
-     '<div class="muted" style="margin-top:6px">Tap an account to update its balance.</div></div>';
-  o+='<div class="card"><h2>Add your data</h2><div class="grid2">'+
-     '<label class="drop"><b>Bank file</b>CommBank CSV<input type="file" accept=".csv,text/csv" data-file="csv"></label>'+
-     '<label class="drop"><b>Payslip</b>PDF from Employment Hero<input type="file" accept="application/pdf,.pdf" data-file="pdf"></label></div>'+
-     '<div class="howto"><b>Bank:</b> NetBank on a computer → your account → Export → CSV. Drop the file here weekly or monthly; duplicates are skipped.<br><b>Payslip:</b> Employment Hero app → Payslips → download PDF.</div></div>';
   var max=Math.max(S.incomeTarget,1); weeks.forEach(function(w){max=Math.max(max,+w.amount||0)});
   o+='<div class="card"><h2>Weekly pay <button class="link" data-add="income">+ Add manually</button></h2>'+
      '<div class="muted">Target '+money(S.incomeTarget)+'/week · <button class="link" data-edit-target>edit</button></div>'+
      (weeks.length?'<div class="weeks"><div class="target-line" style="bottom:'+(S.incomeTarget/max*82*0.96+14)+'px"></div>'+weeks.map(function(w){
         return '<div class="col tap" data-week="'+w.week+'"><i class="'+(+w.amount>=S.incomeTarget?'hit':'')+'" style="height:'+((+w.amount||0)/max*82)+'%"></i><span>'+parse(w.week).getDate()+'/'+(parse(w.week).getMonth()+1)+'</span></div>'}).join('')+'</div><div class="muted" style="margin-top:8px">Green = hit target. Fills in from your bank file and payslips.</div>'
       :'<div class="empty">Drop in a bank file or payslip and your weekly pay appears here automatically.</div>')+'</div>';
-  o+='<div class="card"><h2>Bills &amp; fixed costs <button class="link" data-add="bill">+ Add</button></h2>'+
-     (active.length?active.map(billRow).join(''):'<div class="empty">Nothing due. Add your bills so nothing sneaks up on you.</div>')+
-     (held.length?'<div class="muted" style="margin:14px 0 4px;font-weight:700">Paused</div>'+held.map(billRow).join(''):'')+
-     (paid.length?'<div class="muted" style="margin:14px 0 4px;font-weight:700">Paid</div>'+paid.map(billRow).join(''):'')+
-     '<div class="muted" style="margin-top:8px">Tick when paid; repeating bills roll on to the next due date.</div></div>';
+  o+='<div class="card"><h2>Add your data</h2><div class="grid2">'+
+     '<label class="drop"><b>Bank file</b>CommBank CSV<input type="file" accept=".csv,text/csv" data-file="csv"></label>'+
+     '<label class="drop"><b>Payslip</b>PDF from Employment Hero<input type="file" accept="application/pdf,.pdf" data-file="pdf"></label></div>'+
+     '<div class="howto"><b>Bank:</b> NetBank on a computer → your account → Export → CSV. Drop the file here weekly or monthly; duplicates are skipped.<br><b>Payslip:</b> Employment Hero app → Payslips → download PDF.</div></div>';
   return o;
 }
 function vSpending(){
@@ -1127,11 +1193,11 @@ worktasks:'<path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6l1 1 2-2M3.5 12l1 1
 money:'<rect x="2" y="6" width="20" height="12" rx="3"/><circle cx="12" cy="12" r="2.5"/>',spending:'<path d="M21 12a9 9 0 1 1-9-9v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/>'};
 function render(){
   applyTheme();
-  var v={pay:vPay,today:vToday,trends:vTrends,recruits:vRecruits,goals:vGoals,worktasks:vTasks,money:vMoney,spending:vSpending,lifetasks:vTasks,lifehome:vLifeHome}[tab]();
+  var v={pay:vPay,today:vToday,trends:vTrends,recruits:vRecruits,goals:vGoals,worktasks:vTasks,money:vMoney,spending:vSpending,spendmoney:vSpendMoney,networth:vNetWorth,movingin:vMovingIn,paybills:vPayBills,lifetasks:vTasks,lifehome:vLifeHome}[tab]();
   var app=document.getElementById('app'); app.innerHTML=v; app.className='wrap'+(isLife()?' lifemode':'');
   document.getElementById('nav').className='tabs'+(isLife()?' life':'');
   if(!document.getElementById('fab')){ var fb=document.createElement('button'); fb.id='fab'; fb.className='fab'; fb.setAttribute('aria-label','Quick add'); fb.setAttribute('data-capture',''); fb.innerHTML='<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>'; document.body.appendChild(fb); }
-  document.getElementById('tabs').innerHTML=(isLife()?LIFE_TABS:WORK_TABS).map(function(t){return '<button class="'+(t==tab?'on':'')+'" data-tab="'+t+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+ICONS[t]+'</svg>'+TAB_LABEL[t]+'</button>'}).join('');
+  document.getElementById('tabs').innerHTML=(isLife()?LIFE_TABS:WORK_TABS).map(function(t){return '<button class="'+(t==tab||(t=='money'&&LIFE_SUB.indexOf(tab)>=0)?'on':'')+'" data-tab="'+t+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+ICONS[t]+'</svg>'+TAB_LABEL[t]+'</button>'}).join('');
   setSync(SYNC.key?(syncState||'Syncing…'):'Not connected');
   var df=document.getElementById('dayForm'); if(df) df.onsubmit=function(e){e.preventDefault();var d={};new FormData(df).forEach(function(v,k){d[k]=v});
     var ex=S.days.find(function(x){return x.date==d.date}); var rec={date:d.date,hours:+d.hours,retail:+d.retail,stops:+d.stops||0,buyers:+d.buyers||0};
@@ -1280,7 +1346,7 @@ var swEnd=function(){if(!sw||!sw.on){sw=null;return}sw=null;var v=swt.vel()[0],s
   else appSp.to(0,{response:.35,damping:Math.abs(v)>300?.8:1,velocity:v})};
 app.addEventListener('touchend',swEnd);app.addEventListener('touchcancel',swEnd);
 
-window.addEventListener('hashchange',function(){var h=location.hash.slice(1); if(WORK_TABS.concat(LIFE_TABS).indexOf(h)>=0 && h!=tab){tab=h;render();}});
+window.addEventListener('hashchange',function(){var h=location.hash.slice(1); if(WORK_TABS.concat(LIFE_TABS,LIFE_SUB).indexOf(h)>=0 && h!=tab){tab=h;render();}});
 render();
 pull();
 document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='visible') pull(); });
