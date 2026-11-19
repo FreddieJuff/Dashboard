@@ -352,6 +352,8 @@ function pull(){
      if(!isEmpty(remote) && (isEmpty(S) || (remote.savedAt||0)>(S.savedAt||0) || (remote.savedAt||0)>BASE)){ S=normalise(remote); setBase(remote.savedAt); persistLocal(); if(j.applied) flash='Claude updated your dashboard ('+j.applied+' change'+(j.applied==1?'':'s')+').'; render(); syncOk(); }
      else if((S.savedAt||0)>(remote.savedAt||0)){ setBase(remote.savedAt); push(); }
      else { setBase(remote.savedAt); syncOk(); }
+     upErr=j.up&&j.up.error?j.up.error:'';
+     if(j.up&&applyUp(j.up)){ persistLocal(); setTimeout(render,0); setTimeout(save,2500); }
      if(j.kpi&&Array.isArray(j.kpi.entries)){ var ks=JSON.stringify(j.kpi.entries); if(ks!==JSON.stringify(S.kpiEntries||[])){ S.kpiEntries=j.kpi.entries; setTimeout(save,2500); } }
    }).catch(function(){ pulling=false; syncState='Offline · saved on phone'; setSync(syncState); });
 }
@@ -591,6 +593,41 @@ function vToday(){
   var open=S.tasks.filter(function(t){return !t.done&&WORK_AREAS.indexOf(t.area)>=0}).slice(0,3);
   o+='<div class="sec"><div class="sh"><h3>To-dos</h3><button data-go="worktasks">All ›</button></div><div class="box"><div style="padding:2px 18px">'+(open.length?open.map(taskRow).join(''):'<div class="empty" style="padding:14px 0">All clear.</div>')+'</div></div></div>';
   return o;
+}
+/* ---------- Up Bank (live) ---------- */
+var upErr='';
+var UP_CAT={'groceries':'Groceries','restaurants-and-cafes':'Eating out','takeaway':'Eating out','pubs-and-bars':'Eating out','booze':'Eating out',
+ 'fuel':'Transport','public-transport':'Transport','taxis-and-share-cars':'Transport','parking':'Transport','toll-roads':'Transport','car-insurance-and-maintenance':'Transport','car-repayments':'Transport','cycling':'Transport',
+ 'rent-and-mortgage':'Rent & home','homeware-and-appliances':'Rent & home','home-maintenance-and-improvements':'Rent & home',
+ 'utilities':'Bills','internet':'Bills','mobile-phone':'Bills','home-insurance-and-rates':'Bills','life-admin':'Bills',
+ 'tv-and-music':'Subscriptions','apps-games-and-software':'Subscriptions','fitness-and-wellbeing':'Subscriptions',
+ 'clothing-and-accessories':'Shopping','technology':'Shopping','gifts-and-charity':'Shopping','hair-and-beauty':'Shopping','games-and-software':'Subscriptions'};
+function applyUp(u){
+  if(!u||u.error||!Array.isArray(u.accounts)) return false;
+  var before=JSON.stringify([S.accounts,S.tx]);
+  var txn=u.accounts.filter(function(a){return a.type=='TRANSACTIONAL'})[0], savers=u.accounts.filter(function(a){return a.type=='SAVER'});
+  function link(upAcc,fallbackId,make){
+    var a=S.accounts.find(function(x){return x.upId==upAcc.id}) || (fallbackId&&S.accounts.find(function(x){return x.id==fallbackId&&!x.upId}));
+    if(!a&&make){ a={id:'up_'+upAcc.id.slice(0,8),name:'Up Saver · '+upAcc.name,role:'Up Saver',mine:true}; S.accounts.push(a); }
+    if(a){ a.upId=upAcc.id; a.bal=Math.round(upAcc.bal*100)/100; a.live=true; }
+  }
+  if(txn) link(txn,'a3');
+  var sv=S.savings||{}, goalSaver=savers.length==1?savers[0]:savers.find(function(s){return /moving|emergency|rimu/i.test(s.name)});
+  savers.forEach(function(s){ link(s, s===goalSaver?(sv.acc||'a5'):null, true); });
+  if(txn&&Array.isArray(u.tx)){
+    var old={}; S.tx.forEach(function(t){ old[t.id]=t; });
+    var fresh=u.tx.filter(function(t){return t.acc==txn.id&&!t.transfer&&+t.amt}).map(function(t){
+      var id='up_'+t.id, amt=+t.amt, own=amt>0&&/juffkins/i.test(t.desc);
+      var k=merchantKey(t.desc), cat=old[id]?old[id].cat:own?'Transfers':S.rules[k]||(amt>0?categorise(t.desc,amt):UP_CAT[t.cat]||categorise(t.desc,amt));
+      return {id:id,date:t.date,amt:amt,desc:t.desc,cat:cat,src:'up',pending:t.status=='HELD'};
+    });
+    var keep=S.tx.filter(function(t){return t.src!='up'});
+    S.tx=keep.concat(fresh).sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:0});
+  }
+  S.upAt=Date.now();
+  var changed=JSON.stringify([S.accounts,S.tx])!==before;
+  if(changed) S.accountsUpdated=iso();
+  return changed;
 }
 /* ---------- Pay ---------- */
 function payRate(){ return +S.payRate||33.85; }
@@ -983,8 +1020,8 @@ function vMoney(){
   var safe=spendAcc?(+spendAcc.bal||0)-dueBefore:0;
   o+='<div class="card"><h2>Safe to spend until payday</h2><div class="big '+(safe<0?'neg':'')+'">'+money(safe)+'</div><div class="muted">About '+money(safe/dl)+' a day until '+fmtDate(pd)+(spendAcc?' · from '+esc(spendAcc.name):'')+(dueBefore?' · after '+money(dueBefore)+' of bills due first':'')+'. Rent is already set aside in your Saver.</div></div>';
   o+='<div class="card"><h2>Typical week</h2><div class="stats"><div class="stat"><div class="v">'+(avg?money(avg):'–')+'</div><div class="l">Avg take-home</div></div><div class="stat"><div class="v">'+money(fw)+'</div><div class="l">Fixed costs</div></div><div class="stat"><div class="v '+(avg?(avg-fw>=0?'pos':'neg'):'')+'">'+(avg?money(avg-fw):'–')+'</div><div class="l">For food, fuel, saving</div></div></div><div class="muted" style="margin-top:8px">Based on '+weeks.length+' week'+(weeks.length==1?'':'s')+' of pay. This is a normal week on paper, not money you have right now. Food, fuel and other day-to-day spending come out of the last number.</div></div>';
-  o+='<div class="card"><h2>My accounts <button class="link" data-add="account">+ Add</button></h2><div class="big">'+money(mine,1)+'</div><div class="muted">Mine in total · updated '+(S.accountsUpdated?fmtDate(S.accountsUpdated):'never')+'</div>'+
-     S.accounts.map(function(a){return '<div class="row tap" data-acc="'+a.id+'"><div class="grow"><div class="t">'+esc(a.name)+(a.mine===false?' <span class="badge z-silver">Joint</span>':'')+'</div><div class="s">'+esc(a.role||'')+'</div></div><div class="amt">'+money(a.bal,1)+'</div></div>'}).join('')+
+  o+='<div class="card"><h2>My accounts <button class="link" data-add="account">+ Add</button></h2><div class="big">'+money(mine,1)+'</div><div class="muted">Mine in total · updated '+(S.accountsUpdated?fmtDate(S.accountsUpdated):'never')+(upErr?' · <span style="color:var(--bad,#d64545)">Up: '+esc(upErr)+'</span>':S.upAt?' · Up live':'')+'</div>'+
+     S.accounts.map(function(a){return '<div class="row tap" data-acc="'+a.id+'"><div class="grow"><div class="t">'+esc(a.name)+(a.mine===false?' <span class="badge z-silver">Joint</span>':'')+(a.live?' <span class="badge z-silver" style="color:var(--ok)">● Live</span>':'')+'</div><div class="s">'+esc(a.role||'')+'</div></div><div class="amt">'+money(a.bal,1)+'</div></div>'}).join('')+
      '<div class="muted" style="margin-top:6px">Tap an account to update its balance.</div></div>';
   o+='<div class="card"><h2>Add your data</h2><div class="grid2">'+
      '<label class="drop"><b>Bank file</b>CommBank CSV<input type="file" accept=".csv,text/csv" data-file="csv"></label>'+
