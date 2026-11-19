@@ -617,8 +617,8 @@ function applyUp(u){
   if(txn&&Array.isArray(u.tx)){
     var old={}; S.tx.forEach(function(t){ old[t.id]=t; });
     var fresh=u.tx.filter(function(t){return t.acc==txn.id&&!t.transfer&&+t.amt}).map(function(t){
-      var id='up_'+t.id, amt=+t.amt, own=amt>0&&/juffkins/i.test(t.desc);
-      var k=merchantKey(t.desc), cat=old[id]?old[id].cat:own?'Transfers':S.rules[k]||(amt>0?categorise(t.desc,amt):UP_CAT[t.cat]||categorise(t.desc,amt));
+      var id='up_'+t.id, amt=+t.amt, own=/juffkins/i.test(t.desc);
+      var k=merchantKey(t.desc), cat=own?'Transfers':old[id]?old[id].cat:S.rules[k]||(amt>0?categorise(t.desc,amt):UP_CAT[t.cat]||categorise(t.desc,amt));
       return {id:id,date:t.date,amt:amt,desc:t.desc,cat:cat,src:'up',pending:t.status=='HELD'};
     });
     var keep=S.tx.filter(function(t){return t.src!='up'});
