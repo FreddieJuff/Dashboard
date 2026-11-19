@@ -369,10 +369,11 @@ function settingsSheet(){
     {name:'workDays',label:'Work days per week',type:'number',value:S.workDays||5,req:false},
     {name:'workHours',label:'Hours per work day',type:'number',step:'0.5',value:S.workHours||5.5,req:false},
     {name:'payRate',label:'Pay rate $ per hour',type:'number',step:'0.01',value:payRate(),req:false},
+    {name:'satRate',label:'Saturday rate $ per hour',type:'number',step:'0.01',value:satRate(),req:false},
     {name:'taxRate',label:'Tax rate % (PAYG)',type:'number',step:'0.1',value:taxRate(),req:false},
     {name:'payday',label:'Payday',options:['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'],value:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][S.payday==null?4:S.payday]}],
     function(d){ var nu={url:(d.url||'').trim()||DEFAULT_URL,key:(d.key||'').trim()}; var changed=nu.url!=SYNC.url||nu.key!=SYNC.key; SYNC=nu; try{localStorage.setItem('fd_sync',JSON.stringify(SYNC))}catch(e){}
-      S.payRate=+d.payRate||payRate(); S.taxRate=d.taxRate===''?taxRate():+d.taxRate;
+      S.payRate=+d.payRate||payRate(); S.satRate=+d.satRate||satRate(); S.taxRate=d.taxRate===''?taxRate():+d.taxRate;
       S.workDays=+d.workDays||5; S.workHours=+d.workHours||5.5;
       S.theme=(d.theme||'Auto').toLowerCase(); S.stepGoal=+d.stepGoal||10000;
       S.payday=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].indexOf(d.payday);
@@ -595,19 +596,26 @@ function vToday(){
 function payRate(){ return +S.payRate||33.85; }
 function taxRate(){ return S.taxRate==null||S.taxRate===''?15:+S.taxRate; }
 function addDays(d,n){ var x=parse(d); x.setDate(x.getDate()+n); return iso(x); }
-function calcPay(retail,hours){
-  var pct=bonusPct(retail,hours), base=hours*payRate(), bonus=retail*pct/100, gross=base+bonus, tax=gross*taxRate()/100;
-  return {retail:retail,hours:hours,rph:hours?retail/hours:0,pct:pct,tier:(TIERS.filter(function(t){return t.pct==pct})[0]||{}).name||'',base:base,bonus:bonus,gross:gross,tax:tax,net:gross-tax};
+function satRate(){ return +S.satRate||39.27; }
+function phRate(){ return payRate()*2; }
+// Victorian public holidays (paid at double time)
+var VIC_PH=['2026-09-25','2026-11-03','2026-12-25','2026-12-26','2026-12-28','2027-01-01','2027-01-26','2027-03-08','2027-03-26','2027-03-27','2027-03-28','2027-03-29','2027-04-25','2027-06-14','2027-11-02','2027-12-25','2027-12-26','2027-12-27','2027-12-28'];
+function hourMix(list){ var m={ord:0,sat:0,ph:0}; list.forEach(function(e){ var h=+e.hours||0; if(VIC_PH.indexOf(e.date)>=0) m.ph+=h; else if(parse(e.date).getDay()==6) m.sat+=h; else m.ord+=h; }); return m; }
+function calcPay(retail,hours,mix){
+  mix=mix||{ord:hours,sat:0,ph:0};
+  var pct=bonusPct(retail,hours), base=mix.ord*payRate()+mix.sat*satRate()+mix.ph*phRate(), bonus=retail*pct/100, gross=base+bonus, tax=gross*taxRate()/100;
+  return {mix:mix,retail:retail,hours:hours,rph:hours?retail/hours:0,pct:pct,tier:(TIERS.filter(function(t){return t.pct==pct})[0]||{}).name||'',base:base,bonus:bonus,gross:gross,tax:tax,net:gross-tax};
 }
-function payForWeek(wk){ var end=addDays(wk,7), t=sumE(allEntries().filter(function(e){return e.date>=wk&&e.date<end})); return calcPay(t.retail,t.hours); }
+function payForWeek(wk){ var end=addDays(wk,7), list=allEntries().filter(function(e){return e.date>=wk&&e.date<end}), t=sumE(list); return calcPay(t.retail,t.hours,hourMix(list)); }
 function actualPay(wk){ return (S.income||[]).find(function(x){return x.week==wk&&x.src=='payslip'}); }
 function upcomingPay(){ var pdw=S.payday==null?4:S.payday, d=new Date(), n=(pdw-d.getDay()+7)%7; d.setDate(d.getDate()+n); var pd=iso(d); var wk=addDays(weekStart(d),-7); return {date:pd,wk:wk,today:n==0,est:payForWeek(wk),act:actualPay(wk)}; }
 function weekProjection(){
   var w=workWeek(), t=w.t, hl=hoursLeft(w), tot=t.hours+hl;
   var rph=t.hours?t.rph:sumE(allEntries().slice(-20)).rph;
-  var proj=calcPay(t.retail+rph*hl,tot);
-  var tiers=TIERS.map(function(tr){ var req=Math.max(tr.rph*tot,BONUS_MIN); return {tr:tr,p:calcPay(Math.max(req,t.retail),tot),reached:t.hours>0&&t.retail>=req}; });
-  return {now:calcPay(t.retail,t.hours),proj:proj,tiers:tiers,hl:hl,tot:tot,rph:rph};
+  var wk0=weekStart(new Date()), m0=hourMix(allEntries().filter(function(e){return e.date>=wk0&&e.date<addDays(wk0,7)})), mt={ord:m0.ord+hl,sat:m0.sat,ph:m0.ph};
+  var proj=calcPay(t.retail+rph*hl,tot,mt);
+  var tiers=TIERS.map(function(tr){ var req=Math.max(tr.rph*tot,BONUS_MIN); return {tr:tr,p:calcPay(Math.max(req,t.retail),tot,mt),reached:t.hours>0&&t.retail>=req}; });
+  return {now:calcPay(t.retail,t.hours,m0),proj:proj,tiers:tiers,hl:hl,tot:tot,rph:rph};
 }
 function payLabel(pd){ var x=parse(pd); return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][x.getDay()]+' '+x.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][x.getMonth()]; }
 function payCard(){
@@ -619,7 +627,9 @@ function payCard(){
 }
 function payRows(p){
   return '<div class="r" style="display:grid;grid-template-columns:1fr auto;row-gap:6px;font-size:15px">'+
-    '<div>Hours · '+(Math.round(p.hours*100)/100)+' × '+money(payRate(),1)+'</div><div style="text-align:right">'+money(p.base,1)+'</div>'+
+    '<div>Hours · '+(Math.round(p.mix.ord*100)/100)+' × '+money(payRate(),1)+'</div><div style="text-align:right">'+money(p.mix.ord*payRate(),1)+'</div>'+
+    (p.mix.sat?'<div>Saturday · '+p.mix.sat+' × '+money(satRate(),1)+'</div><div style="text-align:right">'+money(p.mix.sat*satRate(),1)+'</div>':'')+
+    (p.mix.ph?'<div>Public holiday · '+p.mix.ph+' × '+money(phRate(),1)+'</div><div style="text-align:right">'+money(p.mix.ph*phRate(),1)+'</div>':'')+
     '<div>Bonus · '+(p.pct?p.tier+' '+p.pct+'% of '+money(p.retail):p.retail<BONUS_MIN?'under $2,000 minimum':'below $100/hr')+'</div><div style="text-align:right">'+money(p.bonus,1)+'</div>'+
     '<div class="ss" style="margin:0">Gross</div><div class="ss" style="margin:0;text-align:right">'+money(p.gross,1)+'</div>'+
     '<div class="ss" style="margin:0">Tax '+taxRate()+'%</div><div class="ss" style="margin:0;text-align:right">−'+money(p.tax,1)+'</div>'+
@@ -636,7 +646,7 @@ function vPay(){
     '<div><div class="lbl">Projected</div><div class="vv">~'+money(wp.proj.net)+'</div><div class="ss">'+(wp.hl?'at '+money(wp.rph)+'/hr for '+wp.hl+' more hrs':'week done')+'</div></div></div>'+
     '<div class="r" style="display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:6px;font-size:10px;letter-spacing:.08em;color:var(--muted);font-weight:600;text-transform:uppercase"><div>If you finish at</div><div>Retail</div><div style="text-align:right">Take-home</div></div>'+
     wp.tiers.map(function(x){ var gain=x.p.net-wp.proj.net; return '<div class="r" style="display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:6px;font-size:14px;align-items:center'+(x.reached?';opacity:.6':'')+'"><div><div style="font-weight:600">'+x.tr.name+'</div><div class="ss" style="margin:0">$'+x.tr.rph+'/hr · '+x.tr.pct+'%</div></div><div>'+money(x.p.retail)+'</div><div style="text-align:right"><b>'+money(x.p.net)+'</b>'+(x.reached?'<div class="ss" style="margin:0">✓ reached</div>':gain>1?'<div class="ss" style="margin:0">+'+money(gain)+'</div>':'')+'</div></div>'; }).join('')+
-    '<div class="r"><div class="ss">Uses '+money(payRate(),1)+'/hr, '+taxRate()+'% tax and your KPI hours (change rate and tax in Settings). Bonus is an estimate; your leader confirms.</div></div></div></div>';
+    '<div class="r"><div class="ss">Uses '+money(payRate(),1)+'/hr ('+money(satRate(),1)+' Saturdays, '+money(phRate(),1)+' public holidays), '+taxRate()+'% tax and your KPI hours (change rate and tax in Settings). Bonus is an estimate; your leader confirms.</div></div></div></div>';
   var wk={}; allEntries().forEach(function(e){ wk[weekStart(parse(e.date))]=1; }); (S.income||[]).forEach(function(i){ wk[i.week]=1; });
   var cur=weekStart(new Date());
   var weeks=Object.keys(wk).filter(function(w){return w<cur}).sort().slice(-8).map(function(w){ var a=actualPay(w), e=payForWeek(w); return {w:w,a:a,e:e,v:a?+a.amount:e.net}; });
@@ -833,7 +843,7 @@ function setEvents(ev){ events={t:Date.now(),list:ev}; try{localStorage.setItem(
 function nextOutBill(){ return S.bills.filter(function(b){return !b.paid&&!paused(b)}).sort(function(a,b){return a.due<b.due?-1:1})[0]; }
 function safeToSpend(){
   var spendAcc=S.accounts.find(function(a){return a.spend})||S.accounts[0], pd=nextPayday();
-  var due=S.bills.filter(function(b){return !b.paid&&!paused(b)&&!b.fromSaver&&b.due<=pd}).reduce(function(a,b){return a+(+b.amount||0)},0);
+  var due=S.bills.filter(function(b){return !b.paid&&!paused(b)&&!b.fromSaver&&(!b.acc||!spendAcc||b.acc==spendAcc.id)&&b.due<=pd}).reduce(function(a,b){return a+(+b.amount||0)},0);
   return {safe:spendAcc?(+spendAcc.bal||0)-due:0, pd:pd, days:Math.max(1,daysUntil(pd))};
 }
 function countdown(d){var n=daysUntil(d); return n<0?(-n)+' day'+(n==-1?'':'s')+' ago':n==0?'Today':n==1?'Tomorrow':n+' days to go';}
@@ -867,7 +877,7 @@ function vLifeHome(){
   var st=safeToSpend(), nb=nextOutBill(), sv=S.savings||{}, sacc=S.accounts.find(function(a){return a.id==sv.acc}), scur=sacc?(+sacc.bal||0):(+sv.cur||0), sp=sv.target?scur/sv.target:0;
   o+='<div class="sec"><div class="sh"><h3>Money</h3><button data-go="money">Details ›</button></div><div class="box">'+
     '<div class="r hero tap" data-go="money"><div class="lbl">Safe to spend</div><div class="num '+(st.safe<0?'neg':'')+'"><span>$</span>'+Math.round(st.safe).toLocaleString('en-AU')+'</div><div class="meta"><b>'+money(st.safe/st.days)+'</b> a day until payday</div></div>'+
-    '<div class="two"><div class="tap" data-go="money"><div class="lbl">Money in</div><div class="vv">'+parse(st.pd).toLocaleDateString('en-AU',{weekday:'short',day:'numeric'})+'</div><div class="ss">'+(function(){var e=payForWeek(addDays(weekStart(parse(st.pd)),-7));return e.hours?'~'+money(e.net)+' · ':'Payday · ';})()+countdown(st.pd).toLowerCase()+'</div></div>'+
+    '<div class="two"><div class="tap" data-go="money"><div class="lbl">Money in</div><div class="vv">'+parse(st.pd).toLocaleDateString('en-AU',{weekday:'short',day:'numeric'})+'</div><div class="ss">'+(function(){var wk=addDays(weekStart(parse(st.pd)),-7), e=wk==weekStart(new Date())?weekProjection().proj:payForWeek(wk);return e.hours?'~'+money(e.net)+' · ':'Payday · ';})()+countdown(st.pd).toLowerCase()+'</div></div>'+
     '<div class="tap" data-go="money"><div class="lbl">Money out</div><div class="vv">'+(nb?money(nb.amount):'–')+'</div><div class="ss">'+(nb?esc(nb.name.replace(/\s*\(.*\)/,''))+' · '+parse(nb.due).toLocaleDateString('en-AU',{weekday:'short',day:'numeric'}):'Nothing due')+'</div></div></div>'+
     '</div></div>';
   // COMING UP
